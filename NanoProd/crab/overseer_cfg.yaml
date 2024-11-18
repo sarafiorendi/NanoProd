@@ -1,11 +1,11 @@
 cmsswPython: RunKit/nanoProdWrapper.py
 params:
-  customise: NanoProd/NanoProd/customize.customize
+  customise: NanoProd/NanoProd/customizeStau.customizeStau
   outputs:
     - file: nano.root
-      crabOutput: TODO #T2_CH_CERN:/store/group/phys_tau/kandroso/htt_skim_v1_prod/Run2_2016
-      finalOutput: TODO #T2_CH_CERN:/store/group/phys_tau/kandroso/htt_skim_v1/Run2_2016
-      skimCfg: skim_htt.yaml
+      crabOutput: 'T2_CH_CERN:/store/user/fiorendi/displacedTaus/Run3_Summer22_chs_AK4PFCands_v2' #T2_CH_CERN:/store/group/phys_tau/kandroso/htt_skim_v1_prod/Run2_2016
+      finalOutput: 'T2_CH_CERN:/store/user/fiorendi/displacedTaus/Run3_Summer22_chs_AK4PFCands_v2' #T2_CH_CERN:/store/group/phys_tau/kandroso/htt_skim_v1/Run2_2016
+      skimCfg: skim_stau.yaml
       skimSetup: skim
       skimSetupFailed: skim_failed
   maxEvents: -1
@@ -18,13 +18,14 @@ filesToTransfer:
   - RunKit/skim_tree.py
   - RunKit/run_tools.py
   - RunKit/grid_tools.py
-  - NanoProd/config/skim_htt.yaml
-  - NanoProd/python/customize.py
+  - NanoProd/config/skim_stau.yaml
+  - NanoProd/python/customizeStau.py
+  - NanoProd/data/particlenet_v1_a27159734e304ea4b7f9e0042baa9e22.pb
+  - data
 maxMemory: 2500
 numCores: 1
 inputDBS: global
 allowNonValid: False
-autoIgnoreCorrupt: True
 dryrun: False
 maxRecoveryCount: 4
 updateInterval: 60
@@ -36,9 +37,9 @@ localProcessing:
   requirements: TARGET.OpSysAndVer =?= "AlmaLinux9"
   maxParallelJobs: 1000
   maxRuntime: 24 # hours
-targetOutputFileSize: 1024 # MiB
+targetOutputFileSize: 2048 # MiB
 renewKerberosTicket: True
-htmlReport: TODO #T3_CH_CERNBOX:/store/user/kandroso/www/HLepRare/skim_v1/Run2_2016
+#htmlReport: 'T3_CH_CERNBOX:/user/f/fiorendi/www/displaced_taus/report_v1' #T3_CH_CERNBOX:/store/user/kandroso/www/HLepRare/skim_v1/Run2_2016
 whitelistFinalRecovery:
   - T1_DE_KIT
   - T1_US_FNAL

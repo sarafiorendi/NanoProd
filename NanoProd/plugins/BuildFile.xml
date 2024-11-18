@@ -5,3 +5,10 @@
 <use name="RecoVertex/VertexPrimitives"/>
 <use name="TrackingTools/TransientTrack"/>
 <use name="tauolapp"/>
+
+<use name="boost"/>
+<use name="fastjet"/>
+<use name="fastjet-contrib"/>
+<use name="PhysicsTools/TensorFlow" />
+<use name="boost_program_options"/>
+<use name="boost_filesystem"/>

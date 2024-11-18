@@ -1,0 +1,11 @@
+config:
+  params:
+    era: Run3_2022EE
+    sampleType: mc
+    maxEvents: 100
+    maxFiles: 1
+    copyInputsToLocal: false
+    customiseCmds: "process.Timing = cms.Service('Timing', summaryOnly=cms.untracked.bool(True)); process.SimpleMemoryCheck = cms.Service('SimpleMemoryCheck', jobReportOutputOnly=cms.untracked.bool(True)); process.CPU = cms.Service('CPU')"
+  dryrun: true
+
+DY_debug: /DYJetsToLL_M-50_TuneCP5_13p6TeV-madgraphMLM-pythia8/Run3Summer22EEMiniAODv4-forPOG_130X_mcRun3_2022_realistic_postEE_v6-v2/MINIAODSIM
