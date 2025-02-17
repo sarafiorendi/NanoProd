@@ -4,8 +4,8 @@
 <use name="RecoVertex/AdaptiveVertexFit"/>
 <use name="RecoVertex/VertexPrimitives"/>
 <use name="TrackingTools/TransientTrack"/>
+<use name="MagneticField/Engine"/>
 <use name="tauolapp"/>
-
 <use name="boost"/>
 <use name="fastjet"/>
 <use name="fastjet-contrib"/>

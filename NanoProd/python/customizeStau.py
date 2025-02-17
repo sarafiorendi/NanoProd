@@ -181,12 +181,12 @@ def customize_process_and_associate(process, isMC, useCHSJets = True) :
     }
     
     # Create the task
-    print ('adding disTau edproducer')
+#     print ('adding disTau edproducer')
     if useCHSJets:
       process.jetTable.externalVariables = process.jetTable.externalVariables.clone(**d_disTauTagVars)
     ## for puppi jets, use this!
     else:
-      print ('adding disTau edproducer for PUPPI')
+#       print ('adding disTau edproducer for PUPPI')
       process.jetPuppiTable.externalVariables = process.jetPuppiTable.externalVariables.clone(**d_disTauTagVars)
    
     process.custom_nanoaod_task = cms.Task(
@@ -213,9 +213,139 @@ def BTVCustomNanoAODStaus(process):
     return process
 
 
+## add to the nanoAOD dedicated collections with the possible vertices between two leptons
+def addDileptonVertices(process):
+
+    process.dimuonVtxProducer = cms.EDProducer('DimuonVertex',
+        src = cms.InputTag('slimmedMuons'),
+        lep1Selection = cms.string('pt > 2.0 && abs(eta) < 2.4 '),
+        lep2Selection = cms.string('pt > 2.0 && abs(eta) < 2.4 '),
+        preVtxSelection  = cms.string('charge() == 0 && mass < 2.0'),
+        postVtxSelection  = cms.string('userFloat("vtx_normChi2") > 0.001'),
+        beamSpot = cms.InputTag('offlineBeamSpot')
+#         preVtxSelection  = cms.string('abs(userCand("l1").vz - userCand("l2").vz) <= 1.'
+#                                       '&& userFloat("lep_deltaR") > 0.03'),
+#         postVtxSelection = cms.string('0 < userFloat("fitted_mass") && userFloat("fitted_mass") < 5.0'
+#                                       '&& userFloat("sv_prob") > 0.001')
+    )
+
+    process.dimuonTable = cms.EDProducer("SimpleCompositeCandidateFlatTableProducer",
+        src = cms.InputTag("dimuonVtxProducer"),
+        cut = cms.string(""),
+        name = cms.string("dimuon"),
+        doc  = cms.string("collection of dimuon vertices"),
+        singleton = cms.bool(False), # the number of entries is variable
+        extension = cms.bool(False), # this is the main table for the muons
+        variables = cms.PSet(CandVars,
+#               sv_chi2 = Var("userFloat('sv_chi2')", float, doc="Vtx fit probability"),
+              normChi2 = Var("userFloat('vtx_normChi2')", float, doc = "Vtx chi2 norm"),
+              vtx_x = Var("userFloat('vtx_x')", float, doc = "Vtx position in x"),
+              vtx_y = Var("userFloat('vtx_y')", float, doc = "Vtx position in y"),
+              vtx_z = Var("userFloat('vtx_z')", float, doc = "Vtx position in y"),
+              vtx_lxy = Var("userFloat('vtx_lxy')", float, doc = "Vtx 2d displacement from BS"),
+              l1_pt  = Var("userCand('l1').pt", float, doc = "pt of lepton 1"),
+              l1_eta = Var("userCand('l1').eta", float, doc = "eta of lepton 1"),
+              l1_phi = Var("userCand('l1').phi", float, doc = "phi of lepton 1"),
+              l1_charge = Var("userCand('l1').charge", int, doc = "charge of lepton 1"),
+              l2_pt  = Var("userCand('l2').pt", float, doc = "pt of lepton 2"),
+              l2_eta = Var("userCand('l2').eta", float, doc = "eta of lepton 2"),
+              l2_phi = Var("userCand('l2').phi", float, doc = "phi of lepton 2"),
+              l2_charge = Var("userCand('l2').charge", int, doc = "charge of lepton 2"),
+        )
+    )
+    
+
+    ## add vertices from displaced muons
+    process.disDimuonVtxProducer = cms.EDProducer('DimuonVertex',
+        src = cms.InputTag('slimmedDisplacedMuons'),
+        lep1Selection = cms.string('pt > 2.0 && abs(eta) < 2.4 '),
+        lep2Selection = cms.string('pt > 2.0 && abs(eta) < 2.4 '),
+        preVtxSelection  = cms.string('charge() == 0 && mass < 2.0'),
+        postVtxSelection  = cms.string('userFloat("vtx_normChi2") > 0.001'),
+        beamSpot = cms.InputTag('offlineBeamSpot')
+    )
+
+    process.disDimuonTable = cms.EDProducer("SimpleCompositeCandidateFlatTableProducer",
+        src = cms.InputTag("disDimuonVtxProducer"),
+        cut = cms.string(""),
+        name = cms.string("disDimuon"),
+        doc  = cms.string("collection of dimuon vertices from displaced muons"),
+        singleton = cms.bool(False), # the number of entries is variable
+        extension = cms.bool(False), # this is the main table for the muons
+        variables = cms.PSet(CandVars,
+#               sv_chi2 = Var("userFloat('sv_chi2')", float, doc="Vtx fit probability"),
+              normChi2 = Var("userFloat('vtx_normChi2')", float, doc = "Vtx chi2 norm"),
+              vtx_x = Var("userFloat('vtx_x')", float, doc = "Vtx position in x"),
+              vtx_y = Var("userFloat('vtx_y')", float, doc = "Vtx position in y"),
+              vtx_z = Var("userFloat('vtx_z')", float, doc = "Vtx position in y"),
+              vtx_lxy = Var("userFloat('vtx_lxy')", float, doc = "Vtx 2d displacement from BS"),
+              l1_pt  = Var("userCand('l1').pt", float, doc = "pt of lepton 1"),
+              l1_eta = Var("userCand('l1').eta", float, doc = "eta of lepton 1"),
+              l1_phi = Var("userCand('l1').phi", float, doc = "phi of lepton 1"),
+              l1_charge = Var("userCand('l1').charge", int, doc = "charge of lepton 1"),
+              l2_pt  = Var("userCand('l2').pt", float, doc = "pt of lepton 2"),
+              l2_eta = Var("userCand('l2').eta", float, doc = "eta of lepton 2"),
+              l2_phi = Var("userCand('l2').phi", float, doc = "phi of lepton 2"),
+              l2_charge = Var("userCand('l2').charge", int, doc = "charge of lepton 2"),
+        )
+    )
+
+
+    ## add vertices from electrons
+    process.dieleVtxProducer = cms.EDProducer('DielectronVertex',
+        src = cms.InputTag('slimmedElectrons'),
+        lep1Selection = cms.string('pt > 2.0 && abs(eta) < 2.4 '),
+        lep2Selection = cms.string('pt > 2.0 && abs(eta) < 2.4 '),
+        preVtxSelection  = cms.string('charge() == 0 && mass < 2.0'),
+        postVtxSelection  = cms.string('userFloat("vtx_normChi2") > 0.001'),
+        beamSpot = cms.InputTag('offlineBeamSpot')
+    )
+
+
+    process.dieleTable = cms.EDProducer("SimpleCompositeCandidateFlatTableProducer",
+        src = cms.InputTag("dieleVtxProducer"),
+        cut = cms.string(""),
+        name = cms.string("diele"),
+        doc  = cms.string("collection of diele vertices"),
+        singleton = cms.bool(False), # the number of entries is variable
+        extension = cms.bool(False), # this is the main table for the muons
+        variables = cms.PSet(CandVars,
+#               sv_chi2 = Var("userFloat('sv_chi2')", float, doc="Vtx fit probability"),
+              normChi2 = Var("userFloat('vtx_normChi2')", float, doc = "Vtx chi2 norm"),
+              vtx_x = Var("userFloat('vtx_x')", float, doc = "Vtx position in x"),
+              vtx_y = Var("userFloat('vtx_y')", float, doc = "Vtx position in y"),
+              vtx_z = Var("userFloat('vtx_z')", float, doc = "Vtx position in y"),
+              vtx_lxy = Var("userFloat('vtx_lxy')", float, doc = "Vtx 2d displacement from BS"),
+              l1_pt  = Var("userCand('l1').pt", float, doc = "pt of lepton 1"),
+              l1_eta = Var("userCand('l1').eta", float, doc = "eta of lepton 1"),
+              l1_phi = Var("userCand('l1').phi", float, doc = "phi of lepton 1"),
+              l1_charge = Var("userCand('l1').charge", int, doc = "charge of lepton 1"),
+              l2_pt  = Var("userCand('l2').pt", float, doc = "pt of lepton 2"),
+              l2_eta = Var("userCand('l2').eta", float, doc = "eta of lepton 2"),
+              l2_phi = Var("userCand('l2').phi", float, doc = "phi of lepton 2"),
+              l2_charge = Var("userCand('l2').charge", int, doc = "charge of lepton 2"),
+        )
+    )
+
+
+    process.custom_dilepton_task = cms.Task(
+       process.dimuonVtxProducer,
+       process.dimuonTable,
+       process.disDimuonVtxProducer, 
+       process.disDimuonTable,
+       process.dieleVtxProducer,
+       process.dieleTable,
+    )
+
+    # Associate the task 
+    process.schedule.associate(process.custom_dilepton_task)
+    return process
+
+
+
 
 def customizeStau(process):
-  
+
   # customize stored objects
   ## for CHS
   process = customise_run3_jets(process)
@@ -241,12 +371,29 @@ def customizeStau(process):
 #   process = puppiAK4METReclusterFromMiniAOD(process, runOnMC=True, useExistingWeights=False, btagDiscriminatorsAK4=btagDiscriminatorsAK4)
   ## end for puppi tune v18
   
-#   process = customize_process_and_associate(process, 1, useCHSJets = False)
+  ## for any puppi
+# #   process = customize_process_and_associate(process, 1, useCHSJets = False)
 
   ## btv custom
   process = BTVCustomNanoAODStaus(process)
+  
+  process.selectedFinalJetsConstituents = cms.EDFilter("PATPackedCandidatePtrSelector",
+       src = cms.InputTag("finalJetsConstituentsTable"),
+       cut = cms.string("pt > -1")
+  )
+  process.customizedPFCandsTask.add(process.selectedFinalJetsConstituents)
+  process.customConstituentsExtTable.src="selectedFinalJetsConstituents"
+  process.customAK8ConstituentsTable.candidates="selectedFinalJetsConstituents"
+  process.customAK4ConstituentsTable.candidates="selectedFinalJetsConstituents"
+  
   ## for CHS
-  process.finalJetsAK4Constituents.src = src = cms.InputTag("finalJets")
+  process.finalJetsAK4Constituents.src = cms.InputTag("finalJets")
+  process.finalJetsAK4Constituents.cut = cms.string('(pt > 25) && (abs(eta) < 2.1)')
   process.customAK4ConstituentsTable.jets = cms.InputTag("finalJets")
+  process.finalJets.cut = cms.string('(pt > 25) && (abs(eta) < 2.1)')
+  
+  ## add info on dilepton vertices, to study material interaction
+  process = addDileptonVertices(process)
+
   
   return process

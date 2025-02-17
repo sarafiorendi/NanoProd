@@ -1,0 +1,158 @@
+skim:
+  input_tree: Events
+  other_trees:
+    - LuminosityBlocks
+    - Runs
+  sel_ref: selection
+  column_filters:
+    - drop ^(n|)boostedTau(_.*|)$
+    - drop ^(n|)SoftActivityJet(.*|)$
+    - drop ^(n|)IsoTrack(_.*|)$
+    - drop ^(n|)GenIsolatedPhoton(_.*|)$
+    - drop ^(n|)GenProton(_.*|)$
+    - drop ^(n|)GenDressedLepton(_.*|)$
+    - drop ^(n|)GenIsolatedPhoton(_.*|)$
+    - drop ^(n|)Proton(_.*|)$
+    - drop ^(n|)PPSLocalTrack(_.*|)$
+    - drop ^(n|)FatJet(_.*|)$
+    - drop ^(n|)LowPtElectron(_.*|)$
+    - drop ^L1_.*$
+    - drop ^HLT_Rsq.*$
+    - drop ^HLT_DoublePhoton.*$
+    - drop ^HLT_DoubleMu.*$
+    - drop ^HLT_DoubleL2Mu.*
+    - drop ^HLT_DoubleEle.*
+    - drop ^HLT_BTag.*
+    - drop ^HLT_Mu8_IP.*
+    - drop ^HLT_Mu9_IP.*
+    - drop ^HLT_Mu12_IP.*
+    - drop ^HLT_Mu12_IP.*
+    - drop ^HLT_L1.*
+    - drop ^HLT_Mu23_TrkIsoVVL_Ele12_.*
+    - drop ^HLT_Mu10_TrkIsoVVL_DiPFJet.*
+    - drop .*FivePFJet.*
+    - drop .*QuadPFJet1.*
+    - drop ^HTXS_.*
+    - drop ^.*_btagUPar.*
+    - drop ^.*_probDM1UParT.*
+    - drop ^.*Upsilon.*
+    - drop ^HLT_Uncorrected.*
+    - drop ^HLT_Dimuon.*
+    - drop ^HLT_CDC.*
+    - drop ^HLT_QuadPFJet.*
+    - drop ^.*Calibration.*
+    - drop ^.*Scouting.*
+    - drop ^.*LastCollisionInTrain.*
+    - drop ^HLT_Mu12_.*
+    - drop ^HLT_Mu19_.*
+    - drop ^HLT_Mu17_.*
+    - drop ^HLT_*.PFBTag.*$
+    - drop ^HLT_Mu3_.*$
+    - drop ^HLT_Diphoton.*$
+    - drop ^HLT_IsoMu24_TwoProngs.*
+    - drop ^HLT.*_Ele.*_Ele.*
+    - drop ^HLT.*ExpressMuons.*
+    - drop ^HLT.*DiSC.*
+    - drop ^HLT.*DiEle.*
+    - drop ^HLT.*Dimuon.*
+    - drop ^HLT.*Beamspot.*
+    - drop ^HLT.*Fwd.*
+    - drop ^HLT.*Quad.*
+    - drop ^HLT.*Five.*
+    - drop ^HLT.*Triple.*
+    - drop ^HLT.*ZeroBias.*
+    - drop ^HLT.*SoftDrop.*
+    - drop ^HLT.*_Tau3Mu.*
+    - drop ^HLT.*_Mu.*_TkMu.*
+    - drop ^HLT.*Delay.*
+    - drop ^HLT.*Btag.*
+    - drop ^HLT.*BTag.*    
+    
+
+skim_failed:
+  input_tree: Events
+  output_tree: EventsNotSelected
+  sel_ref: selection
+  invert_sel: true
+  column_filters:
+    - drop ^.*$
+    - keep run
+    - keep genWeight
+    - keep ^Pileup_(nPU|nTrueInt)$
+    - keep ^(n|)LHE.*$
+    - keep ^(n|)GenPart(_.*|)$
+    - drop ^HTXS_.*$
+
+
+selection: "
+
+  auto jet_base_sel = Jet_pt > 25 && (abs(Jet_eta) < 2.1);
+  int n_jets = Jet_pt[jet_base_sel].size();
+
+  auto ele_base_sel = Electron_pt > 15 && (abs(Electron_eta) < 2.5 || abs(Electron_eta+Electron_deltaEtaSC) < 2.5);
+  int n_electrons = Electron_pt[ele_base_sel].size();
+
+  auto mu_base_sel = DisMuon_pt > 20 && abs(DisMuon_eta) < 2.5;
+  int n_muons = DisMuon_pt[mu_base_sel].size();
+
+  auto tau_base_sel = Tau_pt > 20 && abs(Tau_eta) < 2.1;
+  auto tau_deepTau_v2p1_sel = Tau_rawDeepTau2017v2p1VSmu > 0.05 && Tau_idDeepTau2017v2p1VSjet > 0 && Tau_idDeepTau2017v2p1VSe > 0;
+  auto tau_deepTau_v2p5_sel = Tau_rawDeepTau2018v2p5VSmu > 0.05 && Tau_idDeepTau2018v2p5VSjet > 0 && Tau_idDeepTau2018v2p5VSe > 0;
+  auto tau_pnet_sel = Tau_rawPNetVSjet > 0.05 && Tau_rawPNetVSe > 0.05 && Tau_rawPNetVSmu > 0.05;
+  auto tau_upart_sel = Tau_rawUParTVSjet > 0.05 && Tau_rawUParTVSe > 0.05 && Tau_rawUParTVSmu > 0.05;
+  auto tau_sel = tau_base_sel && (tau_deepTau_v2p1_sel || tau_deepTau_v2p5_sel || tau_pnet_sel || tau_upart_sel);
+  int n_taus = Tau_pt[tau_base_sel].size();
+  
+  auto prompt_muon_base_sel = Muon_pt > 24 && abs(Muon_eta) < 2.4;
+  auto prompt_muon_id_sel = Muon_tightId || Muon_mediumId || Muon_mediumPromptId || Muon_highPtId || Muon_mvaMuID_WP >= 1 || Muon_miniIsoId >= 2;
+  auto prompt_muon_iso_sel = Muon_pfRelIso04_all < 0.5 || Muon_pfRelIso03_all < 0.5 || Muon_tkRelIso < 0.5 || Muon_miniPFRelIso_all < 0.5;
+  auto prompt_muon_sel = prompt_muon_base_sel && prompt_muon_id_sel && prompt_muon_iso_sel;
+  int n_prompt_muons = Muon_pt[prompt_muon_sel].size();
+  
+  auto two_jets = n_jets >=2;
+  auto one_jet = n_jets >=1;
+  auto one_ele = n_electrons >=1;
+  auto one_mu = n_muons >=1;
+  auto one_tau = n_taus >=1;
+  auto one_prompt_mu = n_prompt_muons >=1;
+  
+  
+  auto trigger_sel  = ( HLT_HT430_DisplacedDijet40_DisplacedTrack > 0 || \				
+                        HLT_HT500_DisplacedDijet40_DisplacedTrack > 0 || \				
+                        HLT_HT650_DisplacedDijet60_Inclusive > 0 || \					
+                        HLT_PFHT500_PFMET100_PFMHT100_IDTight > 0 || \					
+                        HLT_PFHT500_PFMET110_PFMHT110_IDTight > 0 || \					
+                        HLT_PFMET120_PFMHT120_IDTight > 0 || \						
+                        HLT_PFMET130_PFMHT130_IDTight > 0 || \						
+                        HLT_PFMET140_PFMHT140_IDTight > 0 || \						
+                        HLT_PFMET120_PFMHT120_IDTight_PFHT60 > 0 || \					
+                        HLT_PFMETNoMu120_PFMHTNoMu120_IDTight > 0 || \					
+                        HLT_PFMETNoMu130_PFMHTNoMu130_IDTight > 0 || \					
+                        HLT_PFMETNoMu140_PFMHTNoMu140_IDTight > 0 || \					
+                        HLT_MET105_IsoTrk50 > 0 || \							
+                        HLT_MET120_IsoTrk50 > 0 || \							
+                        HLT_PFMET105_IsoTrk50 > 0 || \							
+                        HLT_PFMET110_PFJet100 > 0 || \							
+                        HLT_PFMETNoMu110_PFMHTNoMu110_IDTight_FilterHF > 0 || \			
+                        HLT_PFMETNoMu120_PFMHTNoMu120_IDTight_FilterHF > 0 || \			
+                        HLT_PFMETNoMu130_PFMHTNoMu130_IDTight_FilterHF > 0 || \			
+                        HLT_PFMETNoMu140_PFMHTNoMu140_IDTight_FilterHF > 0 || \			
+                        HLT_IsoMu24_eta2p1 > 0 || \							
+                        HLT_IsoMu27 > 0 || \								
+                        HLT_Mu50 > 0 || \								
+                        HLT_Mu55 > 0 || \								
+                        HLT_IsoMu20_eta2p1_TightChargedIsoPFTauHPS27_eta2p1_CrossL1 > 0 || \		
+                        HLT_IsoMu20_eta2p1_TightChargedIsoPFTauHPS27_eta2p1_TightID_CrossL1 > 0 || \	
+                        HLT_IsoMu20_eta2p1_LooseDeepTauPFTauHPS27_eta2p1_CrossL1 > 0 || \		
+                        HLT_IsoMu24_eta2p1_MediumDeepTauPFTauHPS30_L2NN_eta2p1_CrossL1 > 0 || \	
+                        HLT_IsoMu24_eta2p1_MediumDeepTauPFTauHPS20_eta2p1_SingleL1 > 0 || \		
+                        HLT_IsoMu24_eta2p1_MediumDeepTauPFTauHPS45_L2NN_eta2p1_CrossL1 > 0 || \	
+                        HLT_DoubleMediumChargedIsoPFTauHPS40_Trk1_eta2p1 > 0 || \			
+                        HLT_DoubleTightChargedIsoPFTauHPS35_Trk1_eta2p1 > 0 || \			
+                        HLT_DoubleMediumChargedIsoDisplacedPFTauHPS32_Trk1_eta2p1 > 0 || \		
+                        HLT_DoubleMediumDeepTauPFTauHPS35_L2NN_eta2p1 > 0			
+                     );
+  
+  if (trigger_sel && ((two_jets || (one_jet && one_mu) || (one_tau && one_prompt_mu))) )  return true;
+  return false;
+  "
