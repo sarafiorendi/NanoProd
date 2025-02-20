@@ -31,6 +31,12 @@
 #include "DataFormats/TrackReco/interface/Track.h"
 #include "DataFormats/TrackReco/interface/TrackFwd.h"
 #include "DataFormats/PatCandidates/interface/CompositeCandidate.h"
+
+#include "CommonTools/UtilAlgos/interface/TFileService.h"
+#include "FWCore/ServiceRegistry/interface/Service.h"
+
+#include "TTree.h"
+#include "TROOT.h"
 //
 // class declaration
 //
@@ -49,13 +55,30 @@ public:
 
   static void fillDescriptions(edm::ConfigurationDescriptions& descriptions);
 
+  typedef ROOT::Math::SVector<double, 3> SVector3;
+
 private:
   void beginJob() override;
   void analyze(const edm::Event&, const edm::EventSetup&) override;
   void endJob() override;
 
+  edm::Service<TFileService> fs_;
+  TTree* outTree_;
+
+  float vtx_x_;
+  float vtx_y_;
+  float vtx_z_;
+  float vtx_r_;
+  float vtx_m_;
+  float vtx_normchi2_;
+  float bs_x_;
+  float bs_y_;
+  float vtx_r_bs_;
+
   // ----------member data ---------------------------
-  edm::EDGetTokenT<pat::CompositeCandidateCollection> tracksToken_;  //used to select what tracks to read from configuration file
+  edm::EDGetTokenT<pat::CompositeCandidateCollection> vtxToken_;  //used to select what vtxs to read from configuration file
+  const edm::EDGetTokenT<reco::BeamSpot> beamSpot_;
+
 #ifdef THIS_IS_AN_EVENTSETUP_EXAMPLE
   edm::ESGetToken<SetupData, SetupRecord> setupToken_;
 #endif
@@ -73,17 +96,15 @@ private:
 // constructors and destructor
 //
 DileptonAnalyzer::DileptonAnalyzer(const edm::ParameterSet& iConfig)
-    : tracksToken_(consumes<pat::CompositeCandidateCollection>(iConfig.getUntrackedParameter<edm::InputTag>("tracks"))) {
-#ifdef THIS_IS_AN_EVENTSETUP_EXAMPLE
-  setupDataToken_ = esConsumes<SetupData, SetupRecord>();
-#endif
+    : vtxToken_(consumes<pat::CompositeCandidateCollection>(iConfig.getUntrackedParameter<edm::InputTag>("vtxs"))),
+      beamSpot_(consumes<reco::BeamSpot>(iConfig.getParameter<edm::InputTag>("beamSpot")))
+{
   //now do what ever initialization is needed
 }
 
 DileptonAnalyzer::~DileptonAnalyzer() {
   // do anything here that needs to be done at desctruction time
   // (e.g. close files, deallocate resources etc.)
-  //
   // please remove this method altogether if it would be left empty
 }
 
@@ -93,30 +114,48 @@ DileptonAnalyzer::~DileptonAnalyzer() {
 
 // ------------ method called for each event  ------------
 void DileptonAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup) {
+
   using namespace edm;
 
-  for (const auto& track : iEvent.get(tracksToken_)) {
-    std::cout << "vtx_x: " << track.userFloat("vtx_x") << std::endl;
-    // do something with track parameters, e.g, plot the charge.
-    // int charge = track.charge();
-  }
+  edm::Handle<reco::BeamSpot> theBeamSpotHandle;
+  iEvent.getByToken(beamSpot_, theBeamSpotHandle);
+  const reco::BeamSpot* theBeamSpot = theBeamSpotHandle.product();
+  math::XYZPoint bsPosition(theBeamSpot->position());
 
-#ifdef THIS_IS_AN_EVENTSETUP_EXAMPLE
-  // if the SetupData is always needed
-  auto setup = iSetup.getData(setupToken_);
-  // if need the ESHandle to check if the SetupData was there or not
-  auto pSetup = iSetup.getHandle(setupToken_);
-#endif
+  bs_x_ =  bsPosition.x() ;
+  bs_y_ =  bsPosition.y() ;
+
+  for (const auto& vtx : iEvent.get(vtxToken_)) {
+    vtx_x_ =  vtx.userFloat("vtx_x") ;
+    vtx_y_ =  vtx.userFloat("vtx_y") ;
+    vtx_z_ =  vtx.userFloat("vtx_z") ;
+    vtx_r_ =  vtx.userFloat("vtx_lxy") ;
+    vtx_normchi2_ =  vtx.userFloat("vtx_normChi2") ;
+    vtx_m_ =  vtx.mass() ;
+    SVector3 distVecXY(vtx_x_ - bs_x_, vtx_y_ - bs_y_, 0.);
+    vtx_r_bs_ = ROOT::Math::Mag(distVecXY);
+    outTree_->Fill();  
+  }
 }
 
 // ------------ method called once each job just before starting event loop  ------------
 void DileptonAnalyzer::beginJob() {
-  // please remove this method if not needed
-}
+  outTree_ = fs_->make<TTree>("vtxTree", "vtxTree");
+  outTree_->Branch("vtx_x", &vtx_x_, "vtx_x/F");
+  outTree_->Branch("vtx_y", &vtx_y_, "vtx_y/F");
+  outTree_->Branch("vtx_z", &vtx_z_, "vtx_z/F");
+  outTree_->Branch("vtx_r", &vtx_r_, "vtx_r/F");
+  outTree_->Branch("vtx_m", &vtx_m_, "vtx_m/F");
+  outTree_->Branch("vtx_normchi2", &vtx_normchi2_, "vtx_normchi2/F");
+  outTree_->Branch("bs_x", &bs_x_, "bs_x/F");
+  outTree_->Branch("bs_y", &bs_y_, "bs_y/F");
+  outTree_->Branch("vtx_r_bs", &vtx_r_bs_, "vtx_r_bs/F");
+}  
 
 // ------------ method called once each job just after ending the event loop  ------------
 void DileptonAnalyzer::endJob() {
-  // please remove this method if not needed
+  outTree_->GetDirectory()->cd();
+  outTree_->Write();
 }
 
 // ------------ method fills 'descriptions' with the allowed parameters for the module  ------------
@@ -127,7 +166,7 @@ void DileptonAnalyzer::fillDescriptions(edm::ConfigurationDescriptions& descript
   desc.setUnknown();
   descriptions.addDefault(desc);
 
-  //Specify that only 'tracks' is allowed
+  //Specify that only 'vtxs' is allowed
   //To use, remove the default given above and uncomment below
   //ParameterSetDescription desc;
   //desc.addUntracked<edm::InputTag>("tracks","ctfWithMaterialTracks");
