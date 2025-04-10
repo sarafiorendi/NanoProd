@@ -4,7 +4,10 @@
 <use name="RecoVertex/AdaptiveVertexFit"/>
 <use name="RecoVertex/VertexPrimitives"/>
 <use name="TrackingTools/TransientTrack"/>
+<use name="TrackingTools/GeomPropagators"/>
+<use name="TrackingTools/MaterialEffects"/>
 <use name="MagneticField/Engine"/>
+<use name="MuonAnalysis/MuonAssociators"/>
 <use name="tauolapp"/>
 <use name="boost"/>
 <use name="fastjet"/>
