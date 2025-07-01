@@ -161,7 +161,12 @@ public:
     trkTree_->Branch("eventNumber", &eventNumber_, "eventNumber/L");
     trkTree_->Branch("pt", &trk_pt_, "trk_pt/F");
     trkTree_->Branch("eta", &trk_eta_, "trk_eta/F");
+    trkTree_->Branch("phi", &trk_phi_, "trk_phi/F");
+    trkTree_->Branch("trk_dxy", &trk_dxy_, "trk_dxy/F");
+    trkTree_->Branch("eta_ecal", &trk_eta_ecal_, "trk_eta_ecal/F");
+    trkTree_->Branch("phi_ecal", &trk_phi_ecal_, "trk_phi_ecal/F");    
     trkTree_->Branch("success", &success_, "success/F");
+    trkTree_->Branch("useRK", &useRK_, "useRK/F");
 
     theBarrel_ = initBarrel();
     thePositiveEndcap_ = initPositiveEcalEndcap();
@@ -274,8 +279,12 @@ private:
   TTree* trkTree_;
   float trk_pt_;
   float trk_eta_;
+  float trk_phi_;
+  float trk_eta_ecal_;
+  float trk_phi_ecal_;
+  float trk_dxy_;
   float success_;
-  
+  float useRK_;
   
 };
 
@@ -501,7 +510,6 @@ void MuonTrajectoryPropagator::analyze(const edm::Event &evt, const edm::EventSe
           // recompute isolation at ECAL
           // does it make sense to propagate the tracks to the disk if the muon is in the endcap? 
           // though shouldn't happend given the dr cone
-          float trk_eta_ECAL, trk_phi_ECAL;
           
           if (mu.pt() > 20){
             for (const auto& itrack : *isoTracks) {
@@ -518,17 +526,24 @@ void MuonTrajectoryPropagator::analyze(const edm::Event &evt, const edm::EventSe
               TrajectoryStateOnSurface trkStateAtECAL_ = forwardPropagatorECALpion_->propagate(trackTSOS, barrel());
               trk_pt_ = itrack.pt();
               trk_eta_ = itrack.eta();
+              trk_phi_ = itrack.phi();
+              trk_dxy_ = itrack.dxy(bsPosition);
               
               if (!trkStateAtECAL_.isValid() || (trkStateAtECAL_.isValid() && fabs(trkStateAtECAL_.globalPosition().eta()) > 1.479f)) {
                 //endcap propagator
+//           TrajectoryStateOnSurface innermostState = muTransientTrack.innermostMeasurementState();
+
                 if (itrack.eta() > 0.) {
+//                 if (trkTransientTrack.innermostMeasurementState().globalPosition().eta() > 0.) {
                   trkStateAtECAL_ = forwardPropagatorECALpion_->propagate(trackTSOS, diskPlus());
                 } else {
                   trkStateAtECAL_ = forwardPropagatorECALpion_->propagate(trackTSOS, diskMinus());
                 }
-              }              
+              }  
+              useRK_ = 0;
               if (!trkStateAtECAL_.isValid()) {
                 trkStateAtECAL_ = forwardPropagatorECALpionRK_->propagate(trackTSOS, barrel());
+                useRK_ = 1;
                 if (!trkStateAtECAL_.isValid()){
                   success_ = 0;
                   trkTree_->Fill();  
@@ -536,6 +551,8 @@ void MuonTrajectoryPropagator::analyze(const edm::Event &evt, const edm::EventSe
                 }
               }  
               success_ = 1;
+              trk_eta_ecal_ = trkStateAtECAL_.globalPosition().eta();
+              trk_phi_ecal_ = trkStateAtECAL_.globalPosition().phi();      
               trkTree_->Fill();  
               
               // first compute isolation using only tracks that are propagated to ECAL 
@@ -545,9 +562,7 @@ void MuonTrajectoryPropagator::analyze(const edm::Event &evt, const edm::EventSe
                 my_iso_newTk += itrack.pt();
               
               // then compute isolation using propagated info 
-              trk_eta_ECAL = trkStateAtECAL_.globalPosition().eta();
-              trk_phi_ECAL = trkStateAtECAL_.globalPosition().phi();      
-              float dr_at_ecal = deltaR(eta_ecal_, phi_ecal_, trk_eta_ECAL, trk_phi_ECAL);
+              float dr_at_ecal = deltaR(eta_ecal_, phi_ecal_, trk_eta_ecal_, trk_phi_ecal_);
               if ( dr_at_ecal <= theDR_Max && dr_at_ecal > 0.01)
                 my_iso_newDR += itrack.pt();
             }
@@ -555,6 +570,7 @@ void MuonTrajectoryPropagator::analyze(const edm::Event &evt, const edm::EventSe
         }
       }  
     } // end muon track
+    tkIsoNewTk_ = my_iso_newTk;
     tkIsoNewDR_ = my_iso_newDR;
     outTree_->Fill();  
     
@@ -651,8 +667,14 @@ void MuonTrajectoryPropagator::clearGenVars() {
 void MuonTrajectoryPropagator::clearTrkVars() {
   trk_pt_ = -999;
   trk_eta_ = -999;
+  trk_phi_ = -999;
+  trk_eta_ecal_ = -999;
+  trk_phi_ecal_ = -999;
+  trk_dxy_ = -999;
+  useRK_ = -999;
   success_ = -999;
 }
+
 
 ReferenceCountingPointer<BoundCylinder> MuonTrajectoryPropagator::theBarrel_ = nullptr;
 ReferenceCountingPointer<BoundDisk> MuonTrajectoryPropagator::thePositiveEndcap_ = nullptr;
