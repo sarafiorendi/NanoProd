@@ -28,6 +28,8 @@
 #include "DataFormats/GeometrySurface/interface/SimpleCylinderBounds.h"
 #include "DataFormats/GeometrySurface/interface/SimpleDiskBounds.h"
 
+#include "MagneticField/Records/interface/IdealMagneticFieldRecord.h"
+
 
 #include <iostream>
 #include <fstream>
@@ -85,8 +87,6 @@ public:
     explicit DisplacedMuonIsolation(const edm::ParameterSet&);
     ~DisplacedMuonIsolation(){};
 
-    // static void fillDescriptions(edm::ConfigurationDescriptions&);
-
 private:
     const edm::ESGetToken<TransientTrackBuilder, TransientTrackRecord> ttkToken_;
     PropagatorWithMaterial* forwardPropagatorECAL_, *forwardPropagatorECALpion_, *forwardPropagatorECALpionRK_;
@@ -101,22 +101,21 @@ private:
 
     void produce(edm::Event&, const edm::EventSetup&) override;
 
-    const edm::EDGetTokenT<std::vector<pat::Muon>> recoSrc_;
+    const edm::EDGetTokenT<std::vector<pat::Muon>> muonsToken_;
+    const edm::EDGetTokenT<reco::TrackCollection> tracksToken_;
+    const edm::EDGetTokenT<reco::BeamSpot> beamSpotToken_;
+    edm::ESGetToken<MagneticField, IdealMagneticFieldRecord> const idealMagneticFieldRecordToken_;
+    
     
 };
 
-// void DisplacedMuonIsolation::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
-//     // defining this function will lead to a *_cfi file being generated when compiling
-//     edm::ParameterSetDescription desc;
-//     desc.add<std::string>("graphPath");
-//     desc.add<edm::InputTag>("jets", edm::InputTag("slimmedJets"));
-//     desc.add<edm::InputTag>("pfCandidates", edm::InputTag("packedPFCandidates"));
-//     descriptions.addWithDefaultLabel(desc);
-// }
 
 DisplacedMuonIsolation::DisplacedMuonIsolation(const edm::ParameterSet& cfg)
     : ttkToken_{esConsumes(edm::ESInputTag{"", "TransientTrackBuilder"})},
-      recoSrc_{consumes<std::vector<pat::Muon>>( cfg.getParameter<edm::InputTag>("recoSrc") )}
+      muonsToken_{consumes<std::vector<pat::Muon>>( cfg.getParameter<edm::InputTag>("muons") )},
+      tracksToken_{consumes<reco::TrackCollection>( cfg.getParameter<edm::InputTag>("tracksForIso") )},    
+      beamSpotToken_{consumes<reco::BeamSpot>( cfg.getParameter<edm::InputTag>("beamSpot") )},
+      idealMagneticFieldRecordToken_(esConsumes())
       {
   
     theBarrel_ = initBarrel();
@@ -131,15 +130,41 @@ DisplacedMuonIsolation::DisplacedMuonIsolation(const edm::ParameterSet& cfg)
 void DisplacedMuonIsolation::produce(edm::Event& event, const edm::EventSetup& setup) {
 
     edm::Handle<std::vector<pat::Muon>> recoMuons;
-    event.getByToken(recoSrc_, recoMuons);
+    event.getByToken(muonsToken_, recoMuons);
+
+    edm::Handle<reco::TrackCollection> isoTracks;
+    event.getByToken(tracksToken_, isoTracks);
+    if (!isoTracks.isValid()) return;
+
+    edm::Handle<reco::BeamSpot> theBeamSpotHandle;
+    event.getByToken(beamSpotToken_, theBeamSpotHandle);
+    const reco::BeamSpot* theBeamSpot = theBeamSpotHandle.product();
+    math::XYZPoint bsPosition(theBeamSpot->position());
+
+    // Get magnetic field
+    edm::ESHandle<MagneticField> bFieldHandle;
+    bFieldHandle = setup.getHandle(idealMagneticFieldRecordToken_);
+    const MagneticField* bField = bFieldHandle.product();
+
+    forwardPropagatorECAL_ = new PropagatorWithMaterial(alongMomentum, 0.1057, bField); // muon mass
+    forwardPropagatorECALpion_ = new PropagatorWithMaterial(alongMomentum, 0.139 , bField, 6, false, -1, true); // pion mass
+    forwardPropagatorECALpionRK_ = new PropagatorWithMaterial(alongMomentum, 0.139 , bField, 6, true, -1, true); // pion mass
+
+    double theDiff_z = 0.5;
+    double theDiff_r = 0.2;
+    double theDR_Max = 0.3;  
+    double theDR_Min = 0.01;  
+
 
     const TransientTrackBuilder* theTTBuilder = &setup.getData(ttkToken_);
     
-
     const size_t muons_size = recoMuons->size();
     
     std::vector <Float_t> v_score0(muons_size, -9);
     std::vector <Float_t> v_score1(muons_size, -9);
+    
+    float my_iso_newTk = -99.;
+    float my_iso_newDR = -99;
     
     // step 1: get muons   
     reco::TrackRef muonTrack;
@@ -157,6 +182,10 @@ void DisplacedMuonIsolation::produce(edm::Event& event, const edm::EventSetup& s
       
       if (!noTrack ){
 
+        // reset iso variable
+        my_iso_newDR = 0;
+        my_iso_newTk = 0;
+
         reco::TransientTrack muTransientTrack = theTTBuilder->build(muonTrack);      
         if (muTransientTrack.isValid()) {
           FreeTrajectoryState innerMuTSOS = muTransientTrack.initialFreeState();
@@ -172,16 +201,50 @@ void DisplacedMuonIsolation::produce(edm::Event& event, const edm::EventSetup& s
             float eta_ecal_ = stateAtECAL_.globalPosition().eta();
             float phi_ecal_ = stateAtECAL_.globalPosition().phi();      
           
-          }
-                
+            // loop on tracks to build the isolation
+            for (const auto& itrack : *isoTracks) {
 
-        }
-      }      
+              if (fabs(mu.vz() - itrack.vz()) > theDiff_z || fabs(itrack.dxy(bsPosition)) > theDiff_r)
+                continue;
       
-//       const auto& mu_p4 = mu.polarP4();
-
-      v_score0.at(muIndex) = mu.eta();
-      v_score1.at(muIndex) = mu.pt();
+              // first project track to ECAL
+              const reco::TransientTrack trkTransientTrack(itrack, &(*bFieldHandle));
+              if (!trkTransientTrack.isValid()) continue;
+              FreeTrajectoryState trackTSOS = trkTransientTrack.initialFreeState();
+              TrajectoryStateOnSurface trkStateAtECAL_ = forwardPropagatorECALpion_->propagate(trackTSOS, barrel());
+              if (!trkStateAtECAL_.isValid() || (trkStateAtECAL_.isValid() && fabs(trkStateAtECAL_.globalPosition().eta()) > 1.479f)) {
+                if (itrack.eta() > 0.) {
+                  trkStateAtECAL_ = forwardPropagatorECALpion_->propagate(trackTSOS, diskPlus());
+                } else {
+                  trkStateAtECAL_ = forwardPropagatorECALpion_->propagate(trackTSOS, diskMinus());
+                }
+              }  
+              if (!trkStateAtECAL_.isValid()) {
+                trkStateAtECAL_ = forwardPropagatorECALpionRK_->propagate(trackTSOS, barrel());
+                if (!trkStateAtECAL_.isValid()){
+                  continue;
+                }
+              }  
+              float trk_eta_ecal_ = trkStateAtECAL_.globalPosition().eta();
+              float trk_phi_ecal_ = trkStateAtECAL_.globalPosition().phi();      
+              
+              // first compute isolation using only tracks that are propagated to ECAL 
+              // still using standard coords
+              float dr_tmp = deltaR(mu.eta(), mu.phi(), itrack.eta(), itrack.phi());
+              if ( dr_tmp <= theDR_Max && dr_tmp > theDR_Min)
+                my_iso_newTk += itrack.pt();
+              
+              // then compute isolation using propagated info 
+              float dr_at_ecal = deltaR(eta_ecal_, phi_ecal_, trk_eta_ecal_, trk_phi_ecal_);
+              if ( dr_at_ecal <= theDR_Max && dr_at_ecal > theDR_Min)
+                my_iso_newDR += itrack.pt();
+            } // end loop on tracks
+          } // end if muon prop is valid
+        } // end if mu tt is valid 
+      } // end if mu has a track      
+      
+      v_score0.at(muIndex) = my_iso_newTk;
+      v_score1.at(muIndex) = my_iso_newDR;
     } // end loop on muons 
 
 //     test_vector(v_score0);
@@ -206,6 +269,5 @@ void DisplacedMuonIsolation::produce(edm::Event& event, const edm::EventSetup& s
 ReferenceCountingPointer<BoundCylinder> DisplacedMuonIsolation::theBarrel_ = nullptr;
 ReferenceCountingPointer<BoundDisk> DisplacedMuonIsolation::thePositiveEndcap_ = nullptr;
 ReferenceCountingPointer<BoundDisk> DisplacedMuonIsolation::theNegativeEndcap_ = nullptr;
-
 
 DEFINE_FWK_MODULE(DisplacedMuonIsolation);
