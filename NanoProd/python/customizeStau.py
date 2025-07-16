@@ -70,12 +70,19 @@ def customize_process_and_associate(process, isMC, useCHSJets = True) :
           muons = cms.InputTag("slimmedDisplacedMuons", "", "PAT"),
           tracksForIso = cms.InputTag('unpackedTracksAndVertices'),
           beamSpot = cms.InputTag('offlineBeamSpot'),
+          deltaZ = cms.untracked.double(0.5),
+          deltaDxy = cms.untracked.double(0.2),
+          maxDeltaR = cms.untracked.double(0.3),
+          minDeltaR = cms.untracked.double(0.01),
+          minTrkPt = cms.untracked.double(1.),
     )
     d_displacedMuonIsoVars = {
-          "tkIso_v0":     ExtVar("disMuonIsolation:score0"       , float, doc = "v0"),
-          "tkIso_v1":     ExtVar("disMuonIsolation:score1"       , float, doc = "v1"),
+          "tkIso_newTk":              ExtVar("disMuonIsolation:isoNewTk"           , float, doc = "computed with pT > 1 tracks which pass propagation to ECAL"),
+          "tkIso_newDR":              ExtVar("disMuonIsolation:isoNewDR"           , float, doc = "as tkIsoNewTk, using proj coords for dR"),
+          "tkIso_newDR_dz0p2":        ExtVar("disMuonIsolation:isoNewDRDz0p2"      , float, doc = "as tkIsoNewDR, deltaZ(mu,tk) < 0.2"),
+          "tkIso_newDR_dz0p2_dxy0p1": ExtVar("disMuonIsolation:isoNewDRDz0p2Dxy0p1", float, doc = "as tkIsoNewDRDz0p2, deltaDxy(tk,BS) < 0.1"),
     }
-    
+
     process.disMuonTable = simplePATMuonFlatTableProducer.clone(
         src = cms.InputTag("slimmedDisplacedMuons"),
         name = cms.string("DisMuon"),
@@ -257,7 +264,6 @@ def customize_process_and_associate(process, isMC, useCHSJets = True) :
         )
         process.schedule.associate(process.custom_nanoaod_MC_task)
 
-#     process.disTauTask = cms.Task(process.disTauTag)
     return process
 
 
