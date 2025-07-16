@@ -54,6 +54,28 @@ def customize_process_and_associate(process, isMC, useCHSJets = True) :
 #         )
 #     )
 
+#     from PhysicsTools.NanoAOD.custom_muon_cff import AddVariablesForMuon
+#     displacedMuonWithVariables = "displacedMuonWithVariables"
+#     setattr(proc, displacedMuonWithVariables, cms.EDProducer("MuonSpecialVariables",
+#                     muonSrc=cms.InputTag("slimmedDisplacedMuons"),
+#                     vertexSrc=cms.InputTag("offlineSlimmedPrimaryVertices"),
+#                     trkSrc=cms.InputTag("pfTracks"),
+#                     )
+#     )
+
+    ## unpack PF candidates and lost track, for isolation
+    process.load('PhysicsTools.PatAlgos.slimming.unpackedTracksAndVertices_cfi')
+    process.disMuonIsolation = cms.EDProducer(
+          "DisplacedMuonIsolation",
+          muons = cms.InputTag("slimmedDisplacedMuons", "", "PAT"),
+          tracksForIso = cms.InputTag('unpackedTracksAndVertices'),
+          beamSpot = cms.InputTag('offlineBeamSpot'),
+    )
+    d_displacedMuonIsoVars = {
+          "tkIso_v0":     ExtVar("disMuonIsolation:score0"       , float, doc = "v0"),
+          "tkIso_v1":     ExtVar("disMuonIsolation:score1"       , float, doc = "v1"),
+    }
+    
     process.disMuonTable = simplePATMuonFlatTableProducer.clone(
         src = cms.InputTag("slimmedDisplacedMuons"),
         name = cms.string("DisMuon"),
@@ -112,32 +134,51 @@ def customize_process_and_associate(process, isMC, useCHSJets = True) :
             puppiIsoId = Var("passed('PuppiIsoLoose')+passed('PuppiIsoMedium')+passed('PuppiIsoTight')", "uint8", doc="PuppiIsoId from miniAOD selector (1=Loose, 2=Medium, 3=Tight)"),
             triggerIdLoose = Var("passed('TriggerIdLoose')",bool,doc="TriggerIdLoose ID"),
             inTimeMuon = Var("passed('InTimeMuon')",bool,doc="inTimeMuon ID"),
-            ),
+
+            #Sim Variables
+#             simType = Var("? simType() ? simType() : -99",int,doc="simType"),
+#             simExtType = Var("? simExtType() ? simExtType() : -99",int,doc="simExtType"),
+#             simFlavour = Var("? simFlavour() ? simFlavour() : -99",int,doc="simFlavour"),
+#             simHeaviestMotherFlavour = Var(" ? simHeaviestMotherFlavour() ? simHeaviestMotherFlavour() : -99",int,doc="simHeaviestMotherFlavour"),
+#             simPdgId = Var("? simPdgId() ? simPdgId() : -99",int,doc="simPdgId"),
+#             simMotherPdgId = Var("? simMotherPdgId() ? simMotherPdgId() : -99",int,doc="simMotherPdgId"),
+# #             simBX = Var("? simBX() ? simBX() : -99",int,doc="simBX")
+#             simProdRho = Var("? simProdRho() ? simProdRho(): -99",float,doc="simProdRho"),
+#             simProdZ = Var("? simProdZ() ? simProdZ(): -99",float,doc="simProdZ"),
+#             simPt = Var("? simPt() ? simPt(): -99",float,doc="simPt"),
+#             simEta = Var("? simEta() ? simEta(): -99",float,doc="simEta"),
+#             simPhi = Var("? simPhi() ? simPhi(): -99",float,doc='simPhi'),
+        ),
     )
 
-    process.disMuonsMCMatchForTable = cms.EDProducer("MCMatcher",       # cut on deltaR, deltaPt/Pt; pick best by deltaR
-        src         = process.disMuonTable.src,                         # final reco collection
-        matched     = cms.InputTag("finalGenParticles"),     # final mc-truth particle collection
-        mcPdgId     = cms.vint32(13),               # one or more PDG ID (13 = mu); absolute values (see below)
-        checkCharge = cms.bool(False),              # True = require RECO and MC objects to have the same charge
-        mcStatus    = cms.vint32(1),                # PYTHIA status code (1 = stable, 2 = shower, 3 = hard scattering)
-        maxDeltaR   = cms.double(0.3),              # Minimum deltaR for the match
-        maxDPtRel   = cms.double(0.5),              # Minimum deltaPt/Pt for the match
-        resolveAmbiguities    = cms.bool(True),     # Forbid two RECO objects to match to the same GEN object
-        resolveByMatchQuality = cms.bool(True),    # False = just match input in order; True = pick lowest deltaR pair first
-    )
-
-    process.disMuonMCTable = cms.EDProducer("CandMCMatchTableProducer",
-        src     = process.disMuonTable.src,
-        mcMap   = cms.InputTag("disMuonsMCMatchForTable"),
-        objName = process.disMuonTable.name,
-        objType = cms.string("Muon"), #cms.string("Muon"),
-        branchName = cms.string("genPart"),
-        docString = cms.string("MC matching to status==1 muons"),
-    )
-    
-    process.disMuonMCTask = cms.Task(process.disMuonsMCMatchForTable, process.disMuonMCTable)  
+    process.disMuonTable.externalVariables = process.disMuonTable.externalVariables.clone(**d_displacedMuonIsoVars)
     process.disMuonTablesTask = cms.Task(process.disMuonTable)
+
+
+    if isMC:     
+        process.disMuonsMCMatchForTable = cms.EDProducer("MCMatcher",    # cut on deltaR, deltaPt/Pt; pick best by deltaR
+            src         = process.disMuonTable.src,                      # final reco collection
+            matched     = cms.InputTag("finalGenParticles"),             # final mc-truth particle collection
+            mcPdgId     = cms.vint32(13),               # one or more PDG ID (13 = mu); absolute values (see below)
+            checkCharge = cms.bool(False),              # True = require RECO and MC objects to have the same charge
+            mcStatus    = cms.vint32(1),                # PYTHIA status code (1 = stable, 2 = shower, 3 = hard scattering)
+            maxDeltaR   = cms.double(0.3),              # Minimum deltaR for the match
+            maxDPtRel   = cms.double(0.5),              # Minimum deltaPt/Pt for the match
+            resolveAmbiguities    = cms.bool(True),     # Forbid two RECO objects to match to the same GEN object
+            resolveByMatchQuality = cms.bool(True),     # False = just match input in order; True = pick lowest deltaR pair first
+        )
+    
+        process.disMuonMCTable = cms.EDProducer("CandMCMatchTableProducer",
+            src     = process.disMuonTable.src,
+            mcMap   = cms.InputTag("disMuonsMCMatchForTable"),
+            objName = process.disMuonTable.name,
+            objType = cms.string("Muon"), #cms.string("Muon"),
+            branchName = cms.string("genPart"),
+            docString = cms.string("MC matching to status==1 muons"),
+        )
+        
+        process.disMuonMCTask = cms.Task(process.disMuonsMCMatchForTable, process.disMuonMCTable)  
+
 
     muonTableForID = muonTable.clone()
     muonTableForID.variables.muonHits = Var("? globalTrack().isNonnull() ? globalTrack().hitPattern().numberOfValidMuonHits() : ?  innerTrack().isNonnull() && innerTrack().isAvailable() ? innerTrack().hitPattern().numberOfValidMuonHits() :-99",float,doc="Number of valid Muon Hits from either globalTrack or innerTrack")
@@ -145,6 +186,19 @@ def customize_process_and_associate(process, isMC, useCHSJets = True) :
     muonTableForID.variables.trkChi2 = Var("? globalTrack().isNonnull() ? globalTrack().normalizedChi2() : ? innerTrack().isNonnull() && innerTrack().isAvailable() ? innerTrack().normalizedChi2() : -99",float,doc="Normalized Chi Square from either globalTrack or innerTrack ")
     muonTableForID.variables.positionChi2 = Var("combinedQuality().chi2LocalPosition", float, doc="chi2 Local Position")
     muonTableForID.variables.trkKink = Var("combinedQuality().trkKink", float, doc="Track Kink")
+#     muonTableForID.variables.simType = Var("? simType() ? simType() : -99",int,doc="simType")
+#     muonTableForID.variables.simExtType = Var("? simExtType() ? simExtType() : -99",int,doc="simExtType")
+#     muonTableForID.variables.simFlavour = Var("? simFlavour() ? simFlavour() : -99",int,doc="simFlavour")
+#     muonTableForID.variables.simHeaviestMotherFlavour = Var(" ? simHeaviestMotherFlavour() ? simHeaviestMotherFlavour() : -99",int,doc="simHeaviestMotherFlavour")
+#     muonTableForID.variables.simPdgId = Var("? simPdgId() ? simPdgId() : -99",int,doc="simPdgId")
+#     muonTableForID.variables.simMotherPdgId = Var("? simMotherPdgId() ? simMotherPdgId() : -99",int,doc="simMotherPdgId")
+#     muonTableForID.variables.simBX = Var("? simBX() ? simBX() : -99",int,doc="simBX")
+#     muonTableForID.variables.simProdRho = Var("? simProdRho() ? simProdRho(): -99",float,doc="simProdRho")
+#     muonTableForID.variables.simProdZ = Var("? simProdZ() ? simProdZ(): -99",float,doc="simProdZ")
+#     muonTableForID.variables.simPt = Var("? simPt() ? simPt(): -99",float,doc="simPt")
+#     muonTableForID.variables.simEta = Var("? simEta() ? simEta(): -99",float,doc="simEta")
+#     muonTableForID.variables.simPhi = Var("? simPhi() ? simPhi(): -99",float,doc='simPhi')
+
     process.globalReplace("muonTable", muonTableForID)
 
     if isMC:     
@@ -166,9 +220,9 @@ def customize_process_and_associate(process, isMC, useCHSJets = True) :
     process.disTauTag = cms.EDProducer(
           "DisTauTag",
           ## following line for crab
-          graphPath = cms.string(file_string),
+#           graphPath = cms.string(file_string),
           ## following line for local
-#           graphPath = cms.string("/afs/cern.ch/work/f/fiorendi/private/displacedTaus/desy/LLStaus_Run2/Production/data/models/particlenet_v1_a27159734e304ea4b7f9e0042baa9e22.pb"),
+          graphPath = cms.string("/afs/cern.ch/work/f/fiorendi/private/displacedTaus/desy/LLStaus_Run2/Production/data/models/particlenet_v1_a27159734e304ea4b7f9e0042baa9e22.pb"),
 ###           graphPath = cms.string(os.getenv('CMSSW_BASE')+'/src/data/particlenet_v1_a27159734e304ea4b7f9e0042baa9e22.pb'),
           jets = process.jetTable.src,
           pfCandidates = cms.InputTag('packedPFCandidates'),
@@ -181,7 +235,6 @@ def customize_process_and_associate(process, isMC, useCHSJets = True) :
     }
     
     # Create the task
-#     print ('adding disTau edproducer')
     if useCHSJets:
       process.jetTable.externalVariables = process.jetTable.externalVariables.clone(**d_disTauTagVars)
     ## for puppi jets, use this!
@@ -190,31 +243,41 @@ def customize_process_and_associate(process, isMC, useCHSJets = True) :
       process.jetPuppiTable.externalVariables = process.jetPuppiTable.externalVariables.clone(**d_disTauTagVars)
    
     process.custom_nanoaod_task = cms.Task(
+       process.unpackedTracksAndVertices,
+       process.disMuonIsolation,
        process.disMuonTablesTask,
-       process.disMuonMCTask,
        process.disTauTag,
     )
+    
     # Associate the task 
     process.schedule.associate(process.custom_nanoaod_task)
+    if isMC:
+        process.custom_nanoaod_MC_task = cms.Task(
+           process.disMuonMCTask,
+        )
+        process.schedule.associate(process.custom_nanoaod_MC_task)
+
 #     process.disTauTask = cms.Task(process.disTauTag)
     return process
 
 
-def BTVCustomNanoAODStaus(process):
-    from PhysicsTools.NanoAOD.custom_btv_cff import addPFCands
+def BTVCustomNanoAODStaus(process, isMC):
+    from PhysicsTools.NanoAOD.custom_btv_addpfcands_cff import addPFCands
 #     addPFCands(process,True,False,False)  ## all PF Cands
     addPFCands(process,False,True,False) ## only AK4 cands
     
     ### for MC
-    process.load("PhysicsTools.NanoAOD.btvMC_cff")
-    from PhysicsTools.NanoAOD.btvMC_cff import ak4onlyPFCandsMCSequence
+    if isMC:
+        process.load("PhysicsTools.NanoAOD.btvMC_cff")
+        from PhysicsTools.NanoAOD.btvMC_cff import ak4onlyPFCandsMCSequence
+        
+        process.nanoSequenceMC+=ak4onlyPFCandsMCSequence
     
-    process.nanoSequenceMC+=ak4onlyPFCandsMCSequence
     return process
 
 
 ## add to the nanoAOD dedicated collections with the possible vertices between two leptons
-def addDileptonVertices(process):
+def addDileptonVertices(process, isMC):
 
     process.dimuonVtxProducer = cms.EDProducer('DimuonVertex',
         src = cms.InputTag('slimmedMuons'),
@@ -346,36 +409,38 @@ def addDileptonVertices(process):
 
 def customizeStau(process):
 
+  isMC = True
   # customize stored objects
+
   ## for CHS
   process = customise_run3_jets(process)
-  process = customize_process_and_associate(process, 1, useCHSJets = True)
-  ## for puppi tune v18
-#   from RecoBTag.ONNXRuntime.pfParticleNetFromMiniAODAK4_cff import _pfParticleNetFromMiniAODAK4PuppiCentralJetTagsAll as pfParticleNetFromMiniAODAK4PuppiCentralJetTagsAll
-#   from RecoBTag.ONNXRuntime.pfParticleNetFromMiniAODAK4_cff import _pfParticleNetFromMiniAODAK4PuppiForwardJetTagsAll as pfParticleNetFromMiniAODAK4PuppiForwardJetTagsAll
-#   from RecoBTag.ONNXRuntime.pfUnifiedParticleTransformerAK4_cff import _pfUnifiedParticleTransformerAK4JetTagsAll as pfUnifiedParticleTransformerAK4JetTagsAll
-#   
-#   btagDiscriminatorsAK4 = cms.PSet(
-#    names=cms.vstring(
-#     'pfDeepFlavourJetTags:probb',
-#     'pfDeepFlavourJetTags:probbb',
-#     'pfDeepFlavourJetTags:problepb',
-#     'pfDeepFlavourJetTags:probc',
-#     'pfDeepFlavourJetTags:probuds',
-#     'pfDeepFlavourJetTags:probg')
-#     + pfParticleNetFromMiniAODAK4PuppiCentralJetTagsAll
-#     + pfParticleNetFromMiniAODAK4PuppiForwardJetTagsAll
-#     + pfUnifiedParticleTransformerAK4JetTagsAll
-#   )
+  process = customize_process_and_associate(process, isMC, useCHSJets = True)
+# #   ## for puppi tune v18
+# # #   from RecoBTag.ONNXRuntime.pfParticleNetFromMiniAODAK4_cff import _pfParticleNetFromMiniAODAK4PuppiCentralJetTagsAll as pfParticleNetFromMiniAODAK4PuppiCentralJetTagsAll
+# # #   from RecoBTag.ONNXRuntime.pfParticleNetFromMiniAODAK4_cff import _pfParticleNetFromMiniAODAK4PuppiForwardJetTagsAll as pfParticleNetFromMiniAODAK4PuppiForwardJetTagsAll
+# # #   from RecoBTag.ONNXRuntime.pfUnifiedParticleTransformerAK4_cff import _pfUnifiedParticleTransformerAK4JetTagsAll as pfUnifiedParticleTransformerAK4JetTagsAll
+# # #   
+# # #   btagDiscriminatorsAK4 = cms.PSet(
+# # #    names=cms.vstring(
+# # #     'pfDeepFlavourJetTags:probb',
+# # #     'pfDeepFlavourJetTags:probbb',
+# # #     'pfDeepFlavourJetTags:problepb',
+# # #     'pfDeepFlavourJetTags:probc',
+# # #     'pfDeepFlavourJetTags:probuds',
+# # #     'pfDeepFlavourJetTags:probg')
+# # #     + pfParticleNetFromMiniAODAK4PuppiCentralJetTagsAll
+# # #     + pfParticleNetFromMiniAODAK4PuppiForwardJetTagsAll
+# # #     + pfUnifiedParticleTransformerAK4JetTagsAll
+# # #   )
+# # # 
+# # #   process = puppiAK4METReclusterFromMiniAOD(process, runOnMC=True, useExistingWeights=False, btagDiscriminatorsAK4=btagDiscriminatorsAK4)
+# #   ## end for puppi tune v18
+# #   
+# #   ## for any puppi
+# # # #   process = customize_process_and_associate(process, isMC, useCHSJets = False)
 # 
-#   process = puppiAK4METReclusterFromMiniAOD(process, runOnMC=True, useExistingWeights=False, btagDiscriminatorsAK4=btagDiscriminatorsAK4)
-  ## end for puppi tune v18
-  
-  ## for any puppi
-# #   process = customize_process_and_associate(process, 1, useCHSJets = False)
-
   ## btv custom
-  process = BTVCustomNanoAODStaus(process)
+  process = BTVCustomNanoAODStaus(process, isMC)
   
   process.selectedFinalJetsConstituents = cms.EDFilter("PATPackedCandidatePtrSelector",
        src = cms.InputTag("finalJetsConstituentsTable"),
@@ -393,7 +458,7 @@ def customizeStau(process):
   process.finalJets.cut = cms.string('(pt > 25) && (abs(eta) < 2.1)')
   
   ## add info on dilepton vertices, to study material interaction
-  process = addDileptonVertices(process)
+  process = addDileptonVertices(process, isMC)
 
   
   return process
