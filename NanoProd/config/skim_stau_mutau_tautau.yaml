@@ -67,6 +67,7 @@ skim:
     - drop ^HLT.*Delay.*
     - drop ^HLT.*Btag.*
     - drop ^HLT.*BTag.*    
+    - drop ^HLT.*Mu.*Ele*    
     
 
 skim_failed:
@@ -77,30 +78,33 @@ skim_failed:
   column_filters:
     - drop ^.*$
     - keep run
+    - keep luminosityBlock
+    - keep event
     - keep genWeight
     - keep ^Pileup_(nPU|nTrueInt)$
     - keep ^(n|)LHE.*$
     - keep ^(n|)GenPart(_.*|)$
     - drop ^HTXS_.*$
+    - keep ^Generator_.*$
 
 
 selection: "
 
-  auto jet_base_sel = Jet_pt > 25 && (abs(Jet_eta) < 2.1);
+  auto jet_base_sel = Jet_pt > 20 && (abs(Jet_eta) < 2.4);
   int n_jets = Jet_pt[jet_base_sel].size();
 
   auto ele_base_sel = Electron_pt > 15 && (abs(Electron_eta) < 2.5 || abs(Electron_eta+Electron_deltaEtaSC) < 2.5);
   int n_electrons = Electron_pt[ele_base_sel].size();
 
-  auto mu_base_sel = DisMuon_pt > 20 && abs(DisMuon_eta) < 2.5;
-  int n_muons = DisMuon_pt[mu_base_sel].size();
+  auto dis_muon_base_sel = DisMuon_pt > 20 && abs(DisMuon_eta) < 2.4 ;
+  auto dis_muon_id_sel = DisMuon_mediumId ;
+  int n_dis_muons = DisMuon_pt[dis_muon_base_sel && dis_muon_id_sel].size();
 
   auto tau_base_sel = Tau_pt > 20 && abs(Tau_eta) < 2.1;
-  auto tau_deepTau_v2p1_sel = Tau_rawDeepTau2017v2p1VSmu > 0.05 && Tau_idDeepTau2017v2p1VSjet > 0 && Tau_idDeepTau2017v2p1VSe > 0;
   auto tau_deepTau_v2p5_sel = Tau_rawDeepTau2018v2p5VSmu > 0.05 && Tau_idDeepTau2018v2p5VSjet > 0 && Tau_idDeepTau2018v2p5VSe > 0;
   auto tau_pnet_sel = Tau_rawPNetVSjet > 0.05 && Tau_rawPNetVSe > 0.05 && Tau_rawPNetVSmu > 0.05;
   auto tau_upart_sel = Tau_rawUParTVSjet > 0.05 && Tau_rawUParTVSe > 0.05 && Tau_rawUParTVSmu > 0.05;
-  auto tau_sel = tau_base_sel && (tau_deepTau_v2p1_sel || tau_deepTau_v2p5_sel || tau_pnet_sel || tau_upart_sel);
+  auto tau_sel = tau_base_sel && (tau_deepTau_v2p5_sel || tau_pnet_sel || tau_upart_sel);
   int n_taus = Tau_pt[tau_base_sel].size();
   
   auto prompt_muon_base_sel = Muon_pt > 24 && abs(Muon_eta) < 2.4;
@@ -112,7 +116,7 @@ selection: "
   auto two_jets = n_jets >=2;
   auto one_jet = n_jets >=1;
   auto one_ele = n_electrons >=1;
-  auto one_mu = n_muons >=1;
+  auto one_dis_mu = n_dis_muons >=1;
   auto one_tau = n_taus >=1;
   auto one_prompt_mu = n_prompt_muons >=1;
   
@@ -153,6 +157,6 @@ selection: "
                         HLT_DoubleMediumDeepTauPFTauHPS35_L2NN_eta2p1 > 0			
                      );
   
-  if (trigger_sel && ((two_jets || (one_jet && one_mu) || (one_tau && one_prompt_mu))) )  return true;
+  if (trigger_sel && ((one_jet && one_dis_mu) || (one_jet && one_prompt_mu) || (one_tau && one_prompt_mu)))  return true;
   return false;
   "

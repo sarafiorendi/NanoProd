@@ -2,9 +2,9 @@ import FWCore.ParameterSet.Config as cms
 from PhysicsTools.NanoAOD.common_cff import Var, CandVars
 from PhysicsTools.NanoAOD.nano_eras_cff import *
 
-from PhysicsTools.NanoAOD.simpleCandidateFlatTableProducer_cfi import simpleCandidateFlatTableProducer
+# from PhysicsTools.NanoAOD.simpleCandidateFlatTableProducer_cfi import simpleCandidateFlatTableProducer
 ## for 14_0_X
-from PhysicsTools.NanoAOD.simplePATJetFlatTableProducer_cfi import simplePATJetFlatTableProducer
+# from PhysicsTools.NanoAOD.simplePATJetFlatTableProducer_cfi import simplePATJetFlatTableProducer
 from PhysicsTools.NanoAOD.simplePATMuonFlatTableProducer_cfi import simplePATMuonFlatTableProducer
 
 from PhysicsTools.NanoAOD.common_cff import *
@@ -227,9 +227,9 @@ def customize_process_and_associate(process, isMC, useCHSJets = True) :
     process.disTauTag = cms.EDProducer(
           "DisTauTag",
           ## following line for crab
-#           graphPath = cms.string(file_string),
+          graphPath = cms.string(file_string),
           ## following line for local
-          graphPath = cms.string("/afs/cern.ch/work/f/fiorendi/private/displacedTaus/desy/LLStaus_Run2/Production/data/models/particlenet_v1_a27159734e304ea4b7f9e0042baa9e22.pb"),
+#           graphPath = cms.string("/afs/cern.ch/work/f/fiorendi/private/displacedTaus/desy/LLStaus_Run2/Production/data/models/particlenet_v1_a27159734e304ea4b7f9e0042baa9e22.pb"),
 ###           graphPath = cms.string(os.getenv('CMSSW_BASE')+'/src/data/particlenet_v1_a27159734e304ea4b7f9e0042baa9e22.pb'),
           jets = process.jetTable.src,
           pfCandidates = cms.InputTag('packedPFCandidates'),
@@ -268,16 +268,14 @@ def customize_process_and_associate(process, isMC, useCHSJets = True) :
 
 
 def BTVCustomNanoAODStaus(process, isMC):
-    from PhysicsTools.NanoAOD.custom_btv_addpfcands_cff import addPFCands
-#     addPFCands(process,True,False,False)  ## all PF Cands
+    from PhysicsTools.NanoAOD.custom_btv_cff import addPFCands
     addPFCands(process,False,True,False) ## only AK4 cands
     
     ### for MC
     if isMC:
         process.load("PhysicsTools.NanoAOD.btvMC_cff")
-        from PhysicsTools.NanoAOD.btvMC_cff import ak4onlyPFCandsMCSequence
-        
-        process.nanoSequenceMC+=ak4onlyPFCandsMCSequence
+        from PhysicsTools.NanoAOD.btvMC_cff import addGenCands
+        addGenCands(process,False,True,False) ## only AK4 cands
     
     return process
 
@@ -416,11 +414,12 @@ def addDileptonVertices(process, isMC):
 def customizeStau(process):
 
   isMC = True
+  useCHS = True
   # customize stored objects
 
   ## for CHS
   process = customise_run3_jets(process)
-  process = customize_process_and_associate(process, isMC, useCHSJets = True)
+  process = customize_process_and_associate(process, isMC, useCHSJets = useCHS)
 # #   ## for puppi tune v18
 # # #   from RecoBTag.ONNXRuntime.pfParticleNetFromMiniAODAK4_cff import _pfParticleNetFromMiniAODAK4PuppiCentralJetTagsAll as pfParticleNetFromMiniAODAK4PuppiCentralJetTagsAll
 # # #   from RecoBTag.ONNXRuntime.pfParticleNetFromMiniAODAK4_cff import _pfParticleNetFromMiniAODAK4PuppiForwardJetTagsAll as pfParticleNetFromMiniAODAK4PuppiForwardJetTagsAll
@@ -448,23 +447,17 @@ def customizeStau(process):
   ## btv custom
   process = BTVCustomNanoAODStaus(process, isMC)
   
-  process.selectedFinalJetsConstituents = cms.EDFilter("PATPackedCandidatePtrSelector",
-       src = cms.InputTag("finalJetsConstituentsTable"),
-       cut = cms.string("pt > -1")
-  )
-  process.customizedPFCandsTask.add(process.selectedFinalJetsConstituents)
-  process.customConstituentsExtTable.src="selectedFinalJetsConstituents"
-  process.customAK8ConstituentsTable.candidates="selectedFinalJetsConstituents"
-  process.customAK4ConstituentsTable.candidates="selectedFinalJetsConstituents"
-  
-  ## for CHS
-  process.finalJetsAK4Constituents.src = cms.InputTag("finalJets")
-  process.finalJetsAK4Constituents.cut = cms.string('(pt > 25) && (abs(eta) < 2.1)')
-  process.customAK4ConstituentsTable.jets = cms.InputTag("finalJets")
-  process.finalJets.cut = cms.string('(pt > 25) && (abs(eta) < 2.1)')
+  ## for CHS and select cands
+#   process.finalJetsAK4Constituents.src = cms.InputTag("finalJets")
+#   process.finalJetsAK4Constituents.cut = cms.string('(pt > 25) && (abs(eta) < 2.1)')
+#   process.customAK4ConstituentsTable.jets = cms.InputTag("finalJets")
+#   process.finalJets.cut = cms.string('(pt > 25) && (abs(eta) < 2.1)')
   
   ## add info on dilepton vertices, to study material interaction
   process = addDileptonVertices(process, isMC)
 
+  process.boostedTauTablesTask = cms.Task()
+  process.boostedTauMCTask = cms.Task()
+  process.finalBoostedTaus.cut = cms.string("pt > 25 && tauID(\'decayModeFindingNewDMs\') && (tauID(\'byVVLooseIsolationMVArun2DBoldDMwLT\') || tauID(\'byVVLooseIsolationMVArun2DBnewDMwLT\'))")
   
   return process
