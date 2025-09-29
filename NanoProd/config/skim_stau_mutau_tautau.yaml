@@ -84,12 +84,12 @@ skim_failed:
     - keep ^Pileup_(nPU|nTrueInt)$
     - keep ^(n|)LHE.*$
     - keep ^(n|)GenPart(_.*|)$
+    - keep ^(n|)GenVisTau(_.*|)$
     - drop ^HTXS_.*$
     - keep ^Generator_.*$
 
 
 selection: "
-
   auto jet_base_sel = Jet_pt > 20 && (abs(Jet_eta) < 2.4);
   int n_jets = Jet_pt[jet_base_sel].size();
 
@@ -158,5 +158,7 @@ selection: "
                      );
   
   if (trigger_sel && ((one_jet && one_dis_mu) || (one_jet && one_prompt_mu) || (one_tau && one_prompt_mu)))  return true;
+  
   return false;
-  "
+  
+"  

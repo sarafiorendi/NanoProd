@@ -268,7 +268,7 @@ def customize_process_and_associate(process, isMC, useCHSJets = True) :
 
 
 def BTVCustomNanoAODStaus(process, isMC):
-    from PhysicsTools.NanoAOD.custom_btv_cff import addPFCands
+    from PhysicsTools.NanoAOD.custom_btv_cff import addPFCands  
     addPFCands(process,False,True,False) ## only AK4 cands
     
     ### for MC
@@ -420,6 +420,8 @@ def customizeStau(process):
   ## for CHS
   process = customise_run3_jets(process)
   process = customize_process_and_associate(process, isMC, useCHSJets = useCHS)
+
+
 # #   ## for puppi tune v18
 # # #   from RecoBTag.ONNXRuntime.pfParticleNetFromMiniAODAK4_cff import _pfParticleNetFromMiniAODAK4PuppiCentralJetTagsAll as pfParticleNetFromMiniAODAK4PuppiCentralJetTagsAll
 # # #   from RecoBTag.ONNXRuntime.pfParticleNetFromMiniAODAK4_cff import _pfParticleNetFromMiniAODAK4PuppiForwardJetTagsAll as pfParticleNetFromMiniAODAK4PuppiForwardJetTagsAll
@@ -444,13 +446,15 @@ def customizeStau(process):
 # #   ## for any puppi
 # # # #   process = customize_process_and_associate(process, isMC, useCHSJets = False)
 # 
+
+
   ## btv custom
   process = BTVCustomNanoAODStaus(process, isMC)
   
   ## for CHS and select cands
-#   process.finalJetsAK4Constituents.src = cms.InputTag("finalJets")
+  process.finalJetsAK4Constituents.src = cms.InputTag("finalJets")
 #   process.finalJetsAK4Constituents.cut = cms.string('(pt > 25) && (abs(eta) < 2.1)')
-#   process.customAK4ConstituentsTable.jets = cms.InputTag("finalJets")
+  process.customAK4ConstituentsTable.jets = cms.InputTag("finalJets")
 #   process.finalJets.cut = cms.string('(pt > 25) && (abs(eta) < 2.1)')
   
   ## add info on dilepton vertices, to study material interaction

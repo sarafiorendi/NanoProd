@@ -3,13 +3,13 @@ params:
   customise: NanoProd/NanoProd/customizeStau.customizeStau
   outputs:
     - file: nano.root
-      crabOutput: 'T3_US_FNALLPC:/store/user/lpcdisptau/displacedTaus/nanoprod/Run3_Summer22_chs_AK4PFCands_v9' #TT2_CH_CERN:/store/user/fiorendi/displacedTaus/Run3_Summer22_chs_AK4PFCands_newHPS_v3
-      finalOutput: 'T3_US_FNALLPC:/store/user/lpcdisptau/displacedTaus/nanoprod/summary/Run3_Summer22_chs_AK4PFCands_v9' #T2_CH_CERN:/store/user/fiorendi/displacedTaus/Run3_Summer22_chs_AK4PFCands_newHPS_v3 #     
+      crabOutput: 'T3_US_FNALLPC:/store/user/lpcdisptau/displacedTaus/nanoprod/Run3_Summer22_chs_AK4PFCands_v10' #TT2_CH_CERN:/store/user/fiorendi/displacedTaus/Run3_Summer22_chs_AK4PFCands_newHPS_v3
+      finalOutput: 'T3_US_FNALLPC:/store/user/lpcdisptau/displacedTaus/nanoprod/summary/Run3_Summer22_chs_AK4PFCands_v10' #T2_CH_CERN:/store/user/fiorendi/displacedTaus/Run3_Summer22_chs_AK4PFCands_newHPS_v3 #     
       skimCfg: skim_stau_mutau_tautau.yaml
       skimSetup: skim
       skimSetupFailed: skim_failed
   maxEvents: -1
-unitsPerJob: 2
+unitsPerJob: 4
 scriptExe: RunKit/crabJob.sh
 filesToTransfer:
   - RunKit/crabJob.sh
@@ -39,7 +39,7 @@ localProcessing:
   maxRuntime: 48 # hours
 targetOutputFileSize: 2048 # MiB
 renewKerberosTicket: True
-htmlReport: 'T3_CH_CERNBOX:/store/user/fiorendi/www/displaced_taus/report_Run3_Summer22_chs_AK4PFCands_v9' #T3_CH_CERNBOX:/store/user/username/www/XXX
+htmlReport: 'T3_CH_CERNBOX:/store/user/fiorendi/www/displaced_taus/report_Run3_Summer22_chs_AK4PFCands_v10' #T3_CH_CERNBOX:/store/user/username/www/XXX
 whitelistFinalRecovery:
   - T1_DE_KIT
   - T1_US_FNAL
