@@ -81,6 +81,8 @@ def customize_process_and_associate(process, isMC, useCHSJets = True) :
           "tkIso_newDR":              ExtVar("disMuonIsolation:isoNewDR"           , float, doc = "as tkIsoNewTk, using proj coords for dR"),
           "tkIso_newDR_dz0p2":        ExtVar("disMuonIsolation:isoNewDRDz0p2"      , float, doc = "as tkIsoNewDR, deltaZ(mu,tk) < 0.2"),
           "tkIso_newDR_dz0p2_dxy0p1": ExtVar("disMuonIsolation:isoNewDRDz0p2Dxy0p1", float, doc = "as tkIsoNewDRDz0p2, deltaDxy(tk,BS) < 0.1"),
+          "eta_at_ecal":              ExtVar("disMuonIsolation:etaAtEcal"          , float, doc = "eta when muon traj propagated at ECAL surface"),
+          "phi_at_ecal":              ExtVar("disMuonIsolation:phiAtEcal"          , float, doc = "phi when muon traj propagated at ECAL surface"),
     }
 
     process.disMuonTable = simplePATMuonFlatTableProducer.clone(
@@ -227,9 +229,9 @@ def customize_process_and_associate(process, isMC, useCHSJets = True) :
     process.disTauTag = cms.EDProducer(
           "DisTauTag",
           ## following line for crab
-          graphPath = cms.string(file_string),
+#           graphPath = cms.string(file_string),
           ## following line for local
-#           graphPath = cms.string("/afs/cern.ch/work/f/fiorendi/private/displacedTaus/desy/LLStaus_Run2/Production/data/models/particlenet_v1_a27159734e304ea4b7f9e0042baa9e22.pb"),
+          graphPath = cms.string("/afs/cern.ch/work/f/fiorendi/private/displacedTaus/desy/LLStaus_Run2/Production/data/models/particlenet_v1_a27159734e304ea4b7f9e0042baa9e22.pb"),
 ###           graphPath = cms.string(os.getenv('CMSSW_BASE')+'/src/data/particlenet_v1_a27159734e304ea4b7f9e0042baa9e22.pb'),
           jets = process.jetTable.src,
           pfCandidates = cms.InputTag('packedPFCandidates'),
@@ -264,6 +266,33 @@ def customize_process_and_associate(process, isMC, useCHSJets = True) :
         )
         process.schedule.associate(process.custom_nanoaod_MC_task)
 
+    return process
+
+## propagation for GEN muons
+def customTrajPropagation(process, isMC):
+
+    if not isMC:  return process
+    
+    ## this works if BTVCustomNanoAODStaus has been called previously,
+    ## as it replaces the standard genParticleTable with the btvGenTable.
+    ## in case the BTV customisation is not required, you should change the lines where the ext variables are set
+    ## replacing btvGenTable with genParticleTable
+    process.customizedPropagationTask = cms.Task()
+    process.schedule.associate(process.customizedPropagationTask)
+
+    process.genMuonPropagation = cms.EDProducer(
+          "GenMuonPropagator",
+          src = process.btvGenTable.src,
+
+    )
+    d_genMuonVars = {
+          "eta_at_ecal": ExtVar("genMuonPropagation:etaAtEcal" , float, doc = "eta when muon traj propagated at ECAL surface"),
+          "phi_at_ecal": ExtVar("genMuonPropagation:phiAtEcal" , float, doc = "phi when muon traj propagated at ECAL surface"),
+    }
+    
+    process.btvGenTable.externalVariables = cms.PSet()
+    process.btvGenTable.externalVariables = process.btvGenTable.externalVariables.clone(**d_genMuonVars)
+    process.customizedPropagationTask.add(process.genMuonPropagation)
     return process
 
 
@@ -450,6 +479,7 @@ def customizeStau(process):
 
   ## btv custom
   process = BTVCustomNanoAODStaus(process, isMC)
+  process = customTrajPropagation(process, isMC)
   
   ## for CHS and select cands
   process.finalJetsAK4Constituents.src = cms.InputTag("finalJets")
