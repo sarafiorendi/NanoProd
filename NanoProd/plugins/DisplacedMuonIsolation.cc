@@ -124,6 +124,8 @@ DisplacedMuonIsolation::DisplacedMuonIsolation(const edm::ParameterSet& cfg)
     produces<edm::ValueMap<float>>("isoNewDR"); 
     produces<edm::ValueMap<float>>("isoNewDRDz0p2");
     produces<edm::ValueMap<float>>("isoNewDRDz0p2Dxy0p1"); 
+    produces<edm::ValueMap<float>>("etaAtEcal"); 
+    produces<edm::ValueMap<float>>("phiAtEcal"); 
 }
 
 void DisplacedMuonIsolation::produce(edm::Event& event, const edm::EventSetup& setup) {
@@ -156,11 +158,16 @@ void DisplacedMuonIsolation::produce(edm::Event& event, const edm::EventSetup& s
     std::vector <Float_t> v_iso1(muons_size, -9);
     std::vector <Float_t> v_iso2(muons_size, -9);
     std::vector <Float_t> v_iso3(muons_size, -9);
+    std::vector <Float_t> v_eta_ecal(muons_size, -9);
+    std::vector <Float_t> v_phi_ecal(muons_size, -9);
     
     float my_iso_newTk = -99.;
     float my_iso_newDR = -99;
     float my_iso_newDR_dz0p2 = -99;
     float my_iso_newDR_dz0p2_dxy0p1 = -99;
+
+    float muon_eta_at_ecal = -99;
+    float muon_phi_at_ecal = -99;
     
     // loop on the muons   
     reco::TrackRef muonTrack;
@@ -183,6 +190,10 @@ void DisplacedMuonIsolation::produce(edm::Event& event, const edm::EventSetup& s
         my_iso_newDR = 0;
         my_iso_newDR_dz0p2 = 0;
         my_iso_newDR_dz0p2_dxy0p1 = 0;
+        
+        muon_eta_at_ecal = -99;
+        muon_phi_at_ecal = -99;
+
 
         reco::TransientTrack muTransientTrack = theTTBuilder->build(muonTrack);      
         if (muTransientTrack.isValid()) {
@@ -197,7 +208,9 @@ void DisplacedMuonIsolation::produce(edm::Event& event, const edm::EventSetup& s
           }
           if (stateAtECAL_.isValid()) {  
             float eta_ecal_ = stateAtECAL_.globalPosition().eta();
-            float phi_ecal_ = stateAtECAL_.globalPosition().phi();      
+            float phi_ecal_ = stateAtECAL_.globalPosition().phi();  
+            muon_eta_at_ecal = eta_ecal_;
+            muon_phi_at_ecal = phi_ecal_;
           
             // loop on tracks to build the isolation
             for (const auto& itrack : *isoTracks) {
@@ -256,6 +269,8 @@ void DisplacedMuonIsolation::produce(edm::Event& event, const edm::EventSetup& s
       v_iso1.at(muIndex) = my_iso_newDR;
       v_iso2.at(muIndex) = my_iso_newDR_dz0p2;
       v_iso3.at(muIndex) = my_iso_newDR_dz0p2_dxy0p1;
+      v_eta_ecal.at(muIndex) = muon_eta_at_ecal;
+      v_phi_ecal.at(muIndex) = muon_phi_at_ecal;
     } // end loop on muons 
 
     std::unique_ptr<edm::ValueMap<float>> vm_iso0(new edm::ValueMap<float>());
@@ -281,6 +296,19 @@ void DisplacedMuonIsolation::produce(edm::Event& event, const edm::EventSetup& s
     filler_iso3.insert(recoMuons, v_iso3.begin(), v_iso3.end());
     filler_iso3.fill();
     event.put(std::move(vm_iso3), "isoNewDRDz0p2Dxy0p1"); 
+
+    // now save muon coordinates at ECAL surface
+    std::unique_ptr<edm::ValueMap<float>> vm_eta(new edm::ValueMap<float>());
+    edm::ValueMap<float>::Filler filler_eta(*vm_eta);
+    filler_eta.insert(recoMuons, v_eta_ecal.begin(), v_eta_ecal.end());
+    filler_eta.fill();
+    event.put(std::move(vm_eta), "etaAtEcal"); 
+
+    std::unique_ptr<edm::ValueMap<float>> vm_phi(new edm::ValueMap<float>());
+    edm::ValueMap<float>::Filler filler_phi(*vm_phi);
+    filler_phi.insert(recoMuons, v_phi_ecal.begin(), v_phi_ecal.end());
+    filler_phi.fill();
+    event.put(std::move(vm_phi), "phiAtEcal"); 
 }
 
 ReferenceCountingPointer<BoundCylinder> DisplacedMuonIsolation::theBarrel_ = nullptr;
