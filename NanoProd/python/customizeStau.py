@@ -296,6 +296,44 @@ def customTrajPropagation(process, isMC):
     return process
 
 
+def customPFTrajPropagation(process, isMC):
+
+    process.PFPropagationTask = cms.Task()
+    process.schedule.associate(process.PFPropagationTask)
+
+    process.pfcandPropagation = cms.EDProducer(
+          "PFCandidatePropagator",
+          src = cms.InputTag("packedPFCandidates"),
+    )
+    d_pfPropVars = {
+          "eta_at_ecal": ExtVar("pfcandPropagation:etaAtEcal" , float, doc = "eta when charged pion traj propagated at ECAL surface"),
+          "phi_at_ecal": ExtVar("pfcandPropagation:phiAtEcal" , float, doc = "phi when charged pion traj propagated at ECAL surface"),
+    }
+    process.customConstituentsExtTable.externalVariables = cms.PSet()
+    process.customConstituentsExtTable.externalVariables = process.customConstituentsExtTable.externalVariables.clone(**d_pfPropVars)
+    process.PFPropagationTask.add(process.pfcandPropagation)
+
+    ## propagate Gen PFCands
+    if isMC:
+        process.customizedPFGENPropagationTask = cms.Task()
+        process.schedule.associate(process.customizedPFGENPropagationTask)
+    
+        process.genPFCandPropagation = cms.EDProducer(
+              "GenPFPropagator",
+              src = cms.InputTag("packedGenParticles"),
+        )
+        d_genPFCandVars = {
+              "eta_at_ecal": ExtVar("genPFCandPropagation:etaAtEcal" , float, doc = "eta when PF traj propagated at ECAL surface"),
+              "phi_at_ecal": ExtVar("genPFCandPropagation:phiAtEcal" , float, doc = "phi when PF traj propagated at ECAL surface"),
+        }
+        
+        process.genCandsTable.externalVariables = cms.PSet()
+        process.genCandsTable.externalVariables = process.genCandsTable.externalVariables.clone(**d_genPFCandVars)
+        process.customizedPFGENPropagationTask.add(process.genPFCandPropagation)
+
+    return process
+
+
 def BTVCustomNanoAODStaus(process, isMC):
     from PhysicsTools.NanoAOD.custom_btv_cff import addPFCands  
     addPFCands(process,False,True,False) ## only AK4 cands
@@ -480,6 +518,7 @@ def customizeStau(process):
   ## btv custom
   process = BTVCustomNanoAODStaus(process, isMC)
   process = customTrajPropagation(process, isMC)
+  process = customPFTrajPropagation(process, isMC)
   
   ## for CHS and select cands
   process.finalJetsAK4Constituents.src = cms.InputTag("finalJets")
