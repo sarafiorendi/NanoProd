@@ -143,6 +143,11 @@ def customize_process_and_associate(process, isMC, useCHSJets = True) :
             puppiIsoId = Var("passed('PuppiIsoLoose')+passed('PuppiIsoMedium')+passed('PuppiIsoTight')", "uint8", doc="PuppiIsoId from miniAOD selector (1=Loose, 2=Medium, 3=Tight)"),
             triggerIdLoose = Var("passed('TriggerIdLoose')",bool,doc="TriggerIdLoose ID"),
             inTimeMuon = Var("passed('InTimeMuon')",bool,doc="inTimeMuon ID"),
+            timeAtIpInOut = Var("time().timeAtIpInOut()",float,doc="time from DT/CSC at IP, InOut hypothesis"),
+            timeAtIpInOutErr = Var("time().timeAtIpInOutErr()",float,doc="unc on time from DT/CSC at IP, InOut hypothesis"),
+            timeAtIpOutIn = Var("time().timeAtIpOutIn()",float,doc="time from DT/CSC at IP, OutIn hypothesis"),
+            timeAtIpOutInErr = Var("time().timeAtIpOutInErr()",float,doc="unc on time from DT/CSC at IP, OutIn hypothesis"),
+            timeNDof = Var("time().nDof()",float,doc="number of measurements used in timing calculation")
 
             #Sim Variables
 #             simType = Var("? simType() ? simType() : -99",int,doc="simType"),
@@ -195,6 +200,13 @@ def customize_process_and_associate(process, isMC, useCHSJets = True) :
     muonTableForID.variables.trkChi2 = Var("? globalTrack().isNonnull() ? globalTrack().normalizedChi2() : ? innerTrack().isNonnull() && innerTrack().isAvailable() ? innerTrack().normalizedChi2() : -99",float,doc="Normalized Chi Square from either globalTrack or innerTrack ")
     muonTableForID.variables.positionChi2 = Var("combinedQuality().chi2LocalPosition", float, doc="chi2 Local Position")
     muonTableForID.variables.trkKink = Var("combinedQuality().trkKink", float, doc="Track Kink")
+    muonTableForID.variables.inTimeMuon = Var("passed('InTimeMuon')",bool,doc="inTimeMuon ID"),
+    muonTableForID.variables.timeAtIpInOut = Var("time().timeAtIpInOut()",float,doc="time from DT/CSC at IP, InOut hypothesis"),
+    muonTableForID.variables.timeAtIpInOutErr = Var("time().timeAtIpInOutErr()",float,doc="unc on time from DT/CSC at IP, InOut hypothesis"),
+    muonTableForID.variables.timeAtIpOutIn = Var("time().timeAtIpOutIn()",float,doc="time from DT/CSC at IP, OutIn hypothesis"),
+    muonTableForID.variables.timeAtIpOutInErr = Var("time().timeAtIpOutInErr()",float,doc="unc on time from DT/CSC at IP, OutIn hypothesis"),
+    muonTableForID.variables.timeNDof = Var("time().nDof()",float,doc="number of measurements used in timing calculation")
+
 #     muonTableForID.variables.simType = Var("? simType() ? simType() : -99",int,doc="simType")
 #     muonTableForID.variables.simExtType = Var("? simExtType() ? simExtType() : -99",int,doc="simExtType")
 #     muonTableForID.variables.simFlavour = Var("? simFlavour() ? simFlavour() : -99",int,doc="simFlavour")
@@ -246,7 +258,6 @@ def customize_process_and_associate(process, isMC, useCHSJets = True) :
     # Create the task
     if useCHSJets:
       process.jetTable.externalVariables = process.jetTable.externalVariables.clone(**d_disTauTagVars)
-    ## for puppi jets, use this!
     else:
 #       print ('adding disTau edproducer for PUPPI')
       process.jetPuppiTable.externalVariables = process.jetPuppiTable.externalVariables.clone(**d_disTauTagVars)
@@ -318,18 +329,27 @@ def customPFTrajPropagation(process, isMC):
         process.customizedPFGENPropagationTask = cms.Task()
         process.schedule.associate(process.customizedPFGENPropagationTask)
     
+#         process.genPFCandPropagation = cms.EDProducer(
+#               "GenPFPropagator",
+#               src = cms.InputTag("packedGenParticles"),
+#         )
+#         d_genPFCandVars = {
+#               "eta_at_ecal": ExtVar("genPFCandPropagation:etaAtEcal" , float, doc = "eta when PF traj propagated at ECAL surface"),
+#               "phi_at_ecal": ExtVar("genPFCandPropagation:phiAtEcal" , float, doc = "phi when PF traj propagated at ECAL surface"),
+#         }
+
         process.genPFCandPropagation = cms.EDProducer(
-              "GenPFPropagator",
-              src = cms.InputTag("packedGenParticles"),
+              "GenTauDauPropagator",
+              src = process.btvGenTable.src,
+    
         )
-        d_genPFCandVars = {
-              "eta_at_ecal": ExtVar("genPFCandPropagation:etaAtEcal" , float, doc = "eta when PF traj propagated at ECAL surface"),
-              "phi_at_ecal": ExtVar("genPFCandPropagation:phiAtEcal" , float, doc = "phi when PF traj propagated at ECAL surface"),
+        d_genPionVars = {
+              "eta_at_ecal_pion": ExtVar("genPFCandPropagation:etaAtEcal" , float, doc = "eta when pion traj propagated at ECAL surface"),
+              "phi_at_ecal_pion": ExtVar("genPFCandPropagation:phiAtEcal" , float, doc = "phi when pion traj propagated at ECAL surface"),
         }
-        
-        process.genCandsTable.externalVariables = cms.PSet()
-        process.genCandsTable.externalVariables = process.genCandsTable.externalVariables.clone(**d_genPFCandVars)
+        process.btvGenTable.externalVariables = process.btvGenTable.externalVariables.clone(**d_genPionVars)
         process.customizedPFGENPropagationTask.add(process.genPFCandPropagation)
+
 
     return process
 
@@ -337,6 +357,11 @@ def customPFTrajPropagation(process, isMC):
 def BTVCustomNanoAODStaus(process, isMC):
     from PhysicsTools.NanoAOD.custom_btv_cff import addPFCands  
     addPFCands(process,False,True,False) ## only AK4 cands
+    ## add vars for ECAL and HCAL energy
+    process.customConstituentsExtTable.variables.caloFraction = Var("caloFraction", float, doc = "fraction of ECAL+HCAL energy over candidate energy")
+    process.customConstituentsExtTable.variables.hcalFraction = Var("hcalFraction", float, doc = "Fraction of Hcal for HF, neutral hadrons, and charged particles")
+    process.customConstituentsExtTable.variables.rawCaloFraction = Var("rawCaloFraction", float, doc = "Raw ECAL+HCAL energy over candidate energy for isolated charged hadrons")
+    process.customConstituentsExtTable.variables.rawHcalFraction = Var("rawHcalFraction", float, doc = "Fraction of Hcal for isolated charged hadrons")
     
     ### for MC
     if isMC:
