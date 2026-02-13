@@ -39,7 +39,7 @@ def customise_run3_jets(process):
     return process
  
 
-def customize_process_and_associate(process, isMC, useCHSJets = True) :
+def customize_process_and_associate(process, isMC, useCHSJets = True, isCosmics = False) :
     # Lost tracks
 #     process.lostTrackTable = cms.EDProducer("SimpleCandidateFlatTableProducer",
 #         src = cms.InputTag("lostTracks"),
@@ -65,6 +65,9 @@ def customize_process_and_associate(process, isMC, useCHSJets = True) :
 
     ## unpack PF candidates and lost track, for isolation
     process.load('PhysicsTools.PatAlgos.slimming.unpackedTracksAndVertices_cfi')
+    track_to_propagate = 'global'
+    if isCosmics:  track_to_propagate = 'muon'
+    
     process.disMuonIsolation = cms.EDProducer(
           "DisplacedMuonIsolation",
           muons = cms.InputTag("slimmedDisplacedMuons", "", "PAT"),
@@ -75,6 +78,18 @@ def customize_process_and_associate(process, isMC, useCHSJets = True) :
           maxDeltaR = cms.untracked.double(0.3),
           minDeltaR = cms.untracked.double(0.01),
           minTrkPt = cms.untracked.double(1.),
+          muPropagator2nd = cms.PSet(
+                useTrack = cms.string(track_to_propagate),  # 'none' to use Candidate P4; or 'tracker', 'muon', 'global'
+                useState = cms.string("atVertex"), # 'innermost' and 'outermost' require the TrackExtra
+                useSimpleGeometry = cms.bool(True),
+        	useStation2 = cms.bool(True),
+                fallbackToME1 = cms.bool(False),
+                cosmicPropagationHypothesis = cms.bool(False),
+                useMB2InOverlap = cms.bool(False),
+                propagatorAlong = cms.ESInputTag("", "SteppingHelixPropagatorAlong"),
+                propagatorAny = cms.ESInputTag("", "SteppingHelixPropagatorAny"),
+                propagatorOpposite = cms.ESInputTag("", "SteppingHelixPropagatorOpposite")
+          ),
     )
     d_displacedMuonIsoVars = {
           "tkIso_newTk":              ExtVar("disMuonIsolation:isoNewTk"           , float, doc = "computed with pT > 1 tracks which pass propagation to ECAL"),
@@ -83,6 +98,8 @@ def customize_process_and_associate(process, isMC, useCHSJets = True) :
           "tkIso_newDR_dz0p2_dxy0p1": ExtVar("disMuonIsolation:isoNewDRDz0p2Dxy0p1", float, doc = "as tkIsoNewDRDz0p2, deltaDxy(tk,BS) < 0.1"),
           "eta_at_ecal":              ExtVar("disMuonIsolation:etaAtEcal"          , float, doc = "eta when muon traj propagated at ECAL surface"),
           "phi_at_ecal":              ExtVar("disMuonIsolation:phiAtEcal"          , float, doc = "phi when muon traj propagated at ECAL surface"),
+          "eta_at_mb2":               ExtVar("disMuonIsolation:etaAtMB2"           , float, doc = "eta when muon traj propagated at MB2 surface"),
+          "phi_at_mb2":               ExtVar("disMuonIsolation:phiAtMB2"           , float, doc = "phi when muon traj propagated at MB2 surface"),
     }
 
     process.disMuonTable = simplePATMuonFlatTableProducer.clone(
@@ -147,7 +164,15 @@ def customize_process_and_associate(process, isMC, useCHSJets = True) :
             timeAtIpInOutErr = Var("time().timeAtIpInOutErr()",float,doc="unc on time from DT/CSC at IP, InOut hypothesis"),
             timeAtIpOutIn = Var("time().timeAtIpOutIn()",float,doc="time from DT/CSC at IP, OutIn hypothesis"),
             timeAtIpOutInErr = Var("time().timeAtIpOutInErr()",float,doc="unc on time from DT/CSC at IP, OutIn hypothesis"),
-            timeNDof = Var("time().nDof()",float,doc="number of measurements used in timing calculation")
+            timeNDof = Var("time().nDof()",float,doc="number of measurements used in timing calculation"),
+            numberOfValidMuonDTHits = Var("? isStandAloneMuon ? standAloneMuon().hitPattern().numberOfValidMuonDTHits() : 0", "uint8", doc = "number of valid muon DT hits"),
+            numberOfValidMuonCSCHits = Var("? isStandAloneMuon ? standAloneMuon().hitPattern().numberOfValidMuonCSCHits() : 0", "uint8", doc = "number of valid muon CSC hits"),
+            numberOfValidMuonRPCHits = Var("? isStandAloneMuon ? standAloneMuon().hitPattern().numberOfValidMuonRPCHits() : 0", "uint8", doc = "number of valid muon RPC hits"),
+            numberOfValidMuonHits = Var("? isStandAloneMuon ? standAloneMuon().hitPattern().numberOfValidMuonHits() : 0", "uint8", doc = "number of valid muon hits from sta track"),
+            dtStationsWithValidHits = Var("? isStandAloneMuon ? standAloneMuon().hitPattern().dtStationsWithValidHits() : 0", "uint8", doc = "number of dt stations with hits"),
+            cscStationsWithValidHits = Var("? isStandAloneMuon ? standAloneMuon().hitPattern().cscStationsWithValidHits() : 0", "uint8", doc = "number of csc stations with hits"),
+            staTrackNormChi2 = Var("? isStandAloneMuon ? standAloneMuon().normalizedChi2() : 0", "uint8", doc = "nsta track normalizedChi2"),
+            pca_phi = Var("? isStandAloneMuon ? standAloneMuon().referencePoint().phi() : 0", "uint8", doc = "phi at the point of closest approch"),
 
             #Sim Variables
 #             simType = Var("? simType() ? simType() : -99",int,doc="simType"),
@@ -201,11 +226,11 @@ def customize_process_and_associate(process, isMC, useCHSJets = True) :
     muonTableForID.variables.positionChi2 = Var("combinedQuality().chi2LocalPosition", float, doc="chi2 Local Position")
     muonTableForID.variables.trkKink = Var("combinedQuality().trkKink", float, doc="Track Kink")
     muonTableForID.variables.inTimeMuon = Var("passed('InTimeMuon')",bool,doc="inTimeMuon ID"),
-    muonTableForID.variables.timeAtIpInOut = Var("time().timeAtIpInOut()",float,doc="time from DT/CSC at IP, InOut hypothesis"),
-    muonTableForID.variables.timeAtIpInOutErr = Var("time().timeAtIpInOutErr()",float,doc="unc on time from DT/CSC at IP, InOut hypothesis"),
-    muonTableForID.variables.timeAtIpOutIn = Var("time().timeAtIpOutIn()",float,doc="time from DT/CSC at IP, OutIn hypothesis"),
-    muonTableForID.variables.timeAtIpOutInErr = Var("time().timeAtIpOutInErr()",float,doc="unc on time from DT/CSC at IP, OutIn hypothesis"),
-    muonTableForID.variables.timeNDof = Var("time().nDof()",float,doc="number of measurements used in timing calculation")
+#     muonTableForID.variables.timeAtIpInOut = Var("time().timeAtIpInOut()",float,doc="time from DT/CSC at IP, InOut hypothesis"),
+#     muonTableForID.variables.timeAtIpInOutErr = Var("time().timeAtIpInOutErr()",float,doc="unc on time from DT/CSC at IP, InOut hypothesis"),
+#     muonTableForID.variables.timeAtIpOutIn = Var("time().timeAtIpOutIn()",float,doc="time from DT/CSC at IP, OutIn hypothesis"),
+#     muonTableForID.variables.timeAtIpOutInErr = Var("time().timeAtIpOutInErr()",float,doc="unc on time from DT/CSC at IP, OutIn hypothesis"),
+#     muonTableForID.variables.timeNDof = Var("time().nDof()",float,doc="number of measurements used in timing calculation")
 
 #     muonTableForID.variables.simType = Var("? simType() ? simType() : -99",int,doc="simType")
 #     muonTableForID.variables.simExtType = Var("? simExtType() ? simExtType() : -99",int,doc="simExtType")
@@ -223,10 +248,6 @@ def customize_process_and_associate(process, isMC, useCHSJets = True) :
     process.globalReplace("muonTable", muonTableForID)
 
     if isMC:     
-        # GenParticles
-#         genParticleTable.variables.vertexX        = Var("vertex.X"      , float)
-#         genParticleTable.variables.vertexY        = Var("vertex.Y"      , float)
-#         genParticleTable.variables.vertexZ        = Var("vertex.Z"      , float)
         genParticleTable.variables.vertexRho      = Var("vertex.Rho"    , float)
         genParticleTable.variables.vertexR        = Var("vertex.R"      , float)
         
@@ -241,9 +262,9 @@ def customize_process_and_associate(process, isMC, useCHSJets = True) :
     process.disTauTag = cms.EDProducer(
           "DisTauTag",
           ## following line for crab
-#           graphPath = cms.string(file_string),
+          graphPath = cms.string(file_string),
           ## following line for local
-          graphPath = cms.string("/afs/cern.ch/work/f/fiorendi/private/displacedTaus/desy/LLStaus_Run2/Production/data/models/particlenet_v1_a27159734e304ea4b7f9e0042baa9e22.pb"),
+#           graphPath = cms.string("/afs/cern.ch/work/f/fiorendi/private/displacedTaus/desy/LLStaus_Run2/Production/data/models/particlenet_v1_a27159734e304ea4b7f9e0042baa9e22.pb"),
 ###           graphPath = cms.string(os.getenv('CMSSW_BASE')+'/src/data/particlenet_v1_a27159734e304ea4b7f9e0042baa9e22.pb'),
           jets = process.jetTable.src,
           pfCandidates = cms.InputTag('packedPFCandidates'),
@@ -279,7 +300,7 @@ def customize_process_and_associate(process, isMC, useCHSJets = True) :
 
     return process
 
-## propagation for GEN muons
+## propagation for muons
 def customTrajPropagation(process, isMC):
 
     if not isMC:  return process
@@ -291,14 +312,30 @@ def customTrajPropagation(process, isMC):
     process.customizedPropagationTask = cms.Task()
     process.schedule.associate(process.customizedPropagationTask)
 
+#     from RecoMuon.DetLayers.muonDetLayerGeometry_cfi import *
+    process.load("Configuration.StandardSequences.Reconstruction_cff")
+    process.GlobalTrackingGeometryESProducer = cms.ESProducer("GlobalTrackingGeometryESProducer")
     process.genMuonPropagation = cms.EDProducer(
           "GenMuonPropagator",
           src = process.btvGenTable.src,
-
+          genMuPropagator2nd = cms.PSet(
+                useTrack = cms.string("none"),  # 'none' to use Candidate P4; or 'tracker', 'muon', 'global'
+                useState = cms.string("atVertex"), # 'innermost' and 'outermost' require the TrackExtra / atVertex
+                useSimpleGeometry = cms.bool(True),
+        	useStation2 = cms.bool(True),
+                fallbackToME1 = cms.bool(False),
+                cosmicPropagationHypothesis = cms.bool(False),
+                useMB2InOverlap = cms.bool(False),
+                propagatorAlong = cms.ESInputTag("", "SteppingHelixPropagatorAlong"),
+                propagatorAny = cms.ESInputTag("", "SteppingHelixPropagatorAny"),
+                propagatorOpposite = cms.ESInputTag("", "SteppingHelixPropagatorOpposite")
+          ),
     )
     d_genMuonVars = {
           "eta_at_ecal": ExtVar("genMuonPropagation:etaAtEcal" , float, doc = "eta when muon traj propagated at ECAL surface"),
           "phi_at_ecal": ExtVar("genMuonPropagation:phiAtEcal" , float, doc = "phi when muon traj propagated at ECAL surface"),
+          "eta_at_mb2" : ExtVar("genMuonPropagation:etaAtMB2"  , float, doc = "eta when muon traj propagated at MB2 surface"),
+          "phi_at_mb2" : ExtVar("genMuonPropagation:phiAtMB2"  , float, doc = "phi when muon traj propagated at MB2 surface"),
     }
     
     process.btvGenTable.externalVariables = cms.PSet()
@@ -506,12 +543,13 @@ def addDileptonVertices(process, isMC):
 def customizeStau(process):
 
   isMC = True
+  isCosmics = True
   useCHS = True
   # customize stored objects
 
   ## for CHS
   process = customise_run3_jets(process)
-  process = customize_process_and_associate(process, isMC, useCHSJets = useCHS)
+  process = customize_process_and_associate(process, isMC, useCHSJets = useCHS, isCosmics = isCosmics)
 
 
 # #   ## for puppi tune v18
