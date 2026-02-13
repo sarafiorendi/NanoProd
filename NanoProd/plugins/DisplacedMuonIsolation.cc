@@ -3,17 +3,12 @@
  */
 
 #include <memory>
+#include <cmath>
 
-#include <boost/filesystem.hpp>
-#include <boost/math/constants/constants.hpp>
-
-#include "DataFormats/PatCandidates/interface/PackedCandidate.h"
 #include "FWCore/Framework/interface/Event.h"
 #include "FWCore/Framework/interface/Frameworkfwd.h"
 #include "FWCore/Framework/interface/MakerMacros.h"
-//#include "FWCore/Framework/interface/one/EDProducer.h"
 #include "FWCore/Framework/interface/stream/EDProducer.h"
-//#include "FWCore/Framework/interface/global/EDProducer.h"
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
 
 #include "DataFormats/PatCandidates/interface/Muon.h"
@@ -29,11 +24,7 @@
 #include "DataFormats/GeometrySurface/interface/SimpleDiskBounds.h"
 
 #include "MagneticField/Records/interface/IdealMagneticFieldRecord.h"
-
-
-#include <iostream>
-#include <fstream>
-#include <cstring>
+#include "MuonAnalysis/MuonAssociators/interface/PropagateToMuonSetup.h"
 
 
 constexpr float epsilon = 0.001;
@@ -77,7 +68,6 @@ public:
 
 private:
     const edm::ESGetToken<TransientTrackBuilder, TransientTrackRecord> ttkToken_;
-    PropagatorWithMaterial* forwardPropagatorECAL_, *forwardPropagatorECALpion_, *forwardPropagatorECALpionRK_;
 
     static ReferenceCountingPointer<BoundCylinder> theBarrel_;
     static ReferenceCountingPointer<BoundDisk> thePositiveEndcap_;
@@ -93,6 +83,7 @@ private:
     const edm::EDGetTokenT<reco::TrackCollection> tracksToken_;
     const edm::EDGetTokenT<reco::BeamSpot> beamSpotToken_;
     edm::ESGetToken<MagneticField, IdealMagneticFieldRecord> const idealMagneticFieldRecordToken_;
+    const PropagateToMuonSetup st2propSetup_;
     
     double theDiff_z_;
     double theDiff_r_;
@@ -110,15 +101,18 @@ DisplacedMuonIsolation::DisplacedMuonIsolation(const edm::ParameterSet& cfg)
       tracksToken_{consumes<reco::TrackCollection>( cfg.getParameter<edm::InputTag>("tracksForIso") )},    
       beamSpotToken_{consumes<reco::BeamSpot>( cfg.getParameter<edm::InputTag>("beamSpot") )},
       idealMagneticFieldRecordToken_(esConsumes()),
+      st2propSetup_(cfg.getParameter<edm::ParameterSet>("muPropagator2nd"), consumesCollector()),
       theDiff_z_( cfg.getUntrackedParameter<double>("deltaZ")),
       theDiff_r_( cfg.getUntrackedParameter<double>("deltaDxy")),
       theDR_Max_( cfg.getUntrackedParameter<double>("maxDeltaR")),
       theDR_Min_( cfg.getUntrackedParameter<double>("minDeltaR")),
       thePt_Min_( cfg.getUntrackedParameter<double>("minTrkPt"))
 {  
-    theBarrel_ = initBarrel();
-    thePositiveEndcap_ = initPositiveEcalEndcap();
-    theNegativeEndcap_ = initNegativeEcalEndcap();
+    if (!theBarrel_){
+      theBarrel_ = initBarrel();
+      thePositiveEndcap_ = initPositiveEcalEndcap();
+      theNegativeEndcap_ = initNegativeEcalEndcap();
+    }  
  
     produces<edm::ValueMap<float>>("isoNewTk");
     produces<edm::ValueMap<float>>("isoNewDR"); 
@@ -126,6 +120,8 @@ DisplacedMuonIsolation::DisplacedMuonIsolation(const edm::ParameterSet& cfg)
     produces<edm::ValueMap<float>>("isoNewDRDz0p2Dxy0p1"); 
     produces<edm::ValueMap<float>>("etaAtEcal"); 
     produces<edm::ValueMap<float>>("phiAtEcal"); 
+    produces<edm::ValueMap<float>>("etaAtMB2"); 
+    produces<edm::ValueMap<float>>("phiAtMB2"); 
 }
 
 void DisplacedMuonIsolation::produce(edm::Event& event, const edm::EventSetup& setup) {
@@ -147,9 +143,11 @@ void DisplacedMuonIsolation::produce(edm::Event& event, const edm::EventSetup& s
     bFieldHandle = setup.getHandle(idealMagneticFieldRecordToken_);
     const MagneticField* bField = bFieldHandle.product();
 
-    forwardPropagatorECAL_ = new PropagatorWithMaterial(alongMomentum, 0.1057, bField); // muon mass
-    forwardPropagatorECALpion_ = new PropagatorWithMaterial(alongMomentum, 0.139 , bField, 6, false, -1, true); // pion mass
-    forwardPropagatorECALpionRK_ = new PropagatorWithMaterial(alongMomentum, 0.139 , bField, 6, true, -1, true); // pion mass
+    auto const st2prop = st2propSetup_.init(setup);
+
+    PropagatorWithMaterial forwardPropagatorECAL(alongMomentum, 0.1057, bField); // muon mass
+    PropagatorWithMaterial forwardPropagatorECALpion(alongMomentum, 0.139 , bField, 6, false, -1, true); // pion mass
+    PropagatorWithMaterial forwardPropagatorECALpionRK(alongMomentum, 0.139 , bField, 6, true, -1, true); // pion mass
 
     const TransientTrackBuilder* theTTBuilder = &setup.getData(ttkToken_);
     
@@ -160,6 +158,8 @@ void DisplacedMuonIsolation::produce(edm::Event& event, const edm::EventSetup& s
     std::vector <Float_t> v_iso3(muons_size, -9);
     std::vector <Float_t> v_eta_ecal(muons_size, -9);
     std::vector <Float_t> v_phi_ecal(muons_size, -9);
+    std::vector <Float_t> v_eta_mb2(muons_size, -9);
+    std::vector <Float_t> v_phi_mb2(muons_size, -9);
     
     float my_iso_newTk = -99.;
     float my_iso_newDR = -99;
@@ -168,49 +168,56 @@ void DisplacedMuonIsolation::produce(edm::Event& event, const edm::EventSetup& s
 
     float muon_eta_at_ecal = -99;
     float muon_phi_at_ecal = -99;
+    float muon_eta_at_mb2 = -99;
+    float muon_phi_at_mb2 = -99;
     
     // loop on the muons   
     reco::TrackRef muonTrack;
     for(size_t muIndex = 0; muIndex < muons_size; ++muIndex)
     {
       const auto& mu = recoMuons->at(muIndex);
+
+      muon_eta_at_ecal = -99;
+      muon_phi_at_ecal = -99;
+      muon_eta_at_mb2 = -99;
+      muon_phi_at_mb2 = -99;
+
+      // reset iso variable
+      my_iso_newTk = 0;
+      my_iso_newDR = 0;
+      my_iso_newDR_dz0p2 = 0;
+      my_iso_newDR_dz0p2_dxy0p1 = 0;
+
+      // project muon traj at MB2 surface
+      TrajectoryStateOnSurface stateAtMB2 = st2prop.extrapolate(mu);
+      if (stateAtMB2.isValid()){
+        muon_eta_at_mb2 = stateAtMB2.globalPosition().eta();
+        muon_phi_at_mb2 = stateAtMB2.globalPosition().phi();
+      }
       
       // project muon traj at ECAL surface
       bool noTrack = false;
-      TString type = "";
-      if (mu.isGlobalMuon()) {muonTrack = mu.globalTrack(); type = "global";}
-      else if (mu.isStandAloneMuon()) {muonTrack = mu.standAloneMuon(); type = "standalone";}
-      else if (mu.isTrackerMuon()) {muonTrack = mu.innerTrack(); type = "tracker";}
+      if (mu.isGlobalMuon()) muonTrack = mu.globalTrack(); 
+      else if (mu.isStandAloneMuon()) muonTrack = mu.standAloneMuon(); 
+      else if (mu.isTrackerMuon()) muonTrack = mu.innerTrack(); 
       else noTrack = true;
       
       if (!noTrack ){
 
-        // reset iso variable
-        my_iso_newTk = 0;
-        my_iso_newDR = 0;
-        my_iso_newDR_dz0p2 = 0;
-        my_iso_newDR_dz0p2_dxy0p1 = 0;
-        
-        muon_eta_at_ecal = -99;
-        muon_phi_at_ecal = -99;
-
-
         reco::TransientTrack muTransientTrack = theTTBuilder->build(muonTrack);      
         if (muTransientTrack.isValid()) {
           FreeTrajectoryState innerMuTSOS = muTransientTrack.initialFreeState();
-          TrajectoryStateOnSurface stateAtECAL_ = forwardPropagatorECAL_->propagate(innerMuTSOS, barrel());
-          if (!stateAtECAL_.isValid() || (stateAtECAL_.isValid() && fabs(stateAtECAL_.globalPosition().eta()) > 1.479f)) {
+          TrajectoryStateOnSurface stateAtECAL_ = forwardPropagatorECAL.propagate(innerMuTSOS, barrel());
+          if (!stateAtECAL_.isValid() || (std::abs(stateAtECAL_.globalPosition().eta()) > 1.479f)) {
              if (mu.eta() > 0.) {
-               stateAtECAL_ = forwardPropagatorECAL_->propagate(innerMuTSOS, diskPlus());
+               stateAtECAL_ = forwardPropagatorECAL.propagate(innerMuTSOS, diskPlus());
              } else {
-               stateAtECAL_ = forwardPropagatorECAL_->propagate(innerMuTSOS, diskMinus());
+               stateAtECAL_ = forwardPropagatorECAL.propagate(innerMuTSOS, diskMinus());
              }
           }
           if (stateAtECAL_.isValid()) {  
-            float eta_ecal_ = stateAtECAL_.globalPosition().eta();
-            float phi_ecal_ = stateAtECAL_.globalPosition().phi();  
-            muon_eta_at_ecal = eta_ecal_;
-            muon_phi_at_ecal = phi_ecal_;
+            muon_eta_at_ecal = stateAtECAL_.globalPosition().eta();
+            muon_phi_at_ecal = stateAtECAL_.globalPosition().phi();  
           
             // loop on tracks to build the isolation
             for (const auto& itrack : *isoTracks) {
@@ -218,23 +225,23 @@ void DisplacedMuonIsolation::produce(edm::Event& event, const edm::EventSetup& s
               if (itrack.pt() < thePt_Min_) 
                 continue;
 
-              if (fabs(mu.vz() - itrack.vz()) > theDiff_z_ || fabs(itrack.dxy(bsPosition)) > theDiff_r_)
+              if (std::abs(mu.vz() - itrack.vz()) > theDiff_z_ || std::abs(itrack.dxy(bsPosition)) > theDiff_r_)
                 continue;
       
               // project track to ECAL
-              const reco::TransientTrack trkTransientTrack(itrack, &(*bFieldHandle));
+              const reco::TransientTrack trkTransientTrack(itrack, bField);
               if (!trkTransientTrack.isValid()) continue;
               FreeTrajectoryState trackTSOS = trkTransientTrack.initialFreeState();
-              TrajectoryStateOnSurface trkStateAtECAL_ = forwardPropagatorECALpion_->propagate(trackTSOS, barrel());
-              if (!trkStateAtECAL_.isValid() || (trkStateAtECAL_.isValid() && fabs(trkStateAtECAL_.globalPosition().eta()) > 1.479f)) {
+              TrajectoryStateOnSurface trkStateAtECAL_ = forwardPropagatorECALpion.propagate(trackTSOS, barrel());
+              if (!trkStateAtECAL_.isValid() || (std::abs(trkStateAtECAL_.globalPosition().eta()) > 1.479f)) {
                 if (itrack.eta() > 0.) {
-                  trkStateAtECAL_ = forwardPropagatorECALpion_->propagate(trackTSOS, diskPlus());
+                  trkStateAtECAL_ = forwardPropagatorECALpion.propagate(trackTSOS, diskPlus());
                 } else {
-                  trkStateAtECAL_ = forwardPropagatorECALpion_->propagate(trackTSOS, diskMinus());
+                  trkStateAtECAL_ = forwardPropagatorECALpion.propagate(trackTSOS, diskMinus());
                 }
               }  
               if (!trkStateAtECAL_.isValid()) {
-                trkStateAtECAL_ = forwardPropagatorECALpionRK_->propagate(trackTSOS, barrel());
+                trkStateAtECAL_ = forwardPropagatorECALpionRK.propagate(trackTSOS, barrel());
                 if (!trkStateAtECAL_.isValid()){
                   continue;
                 }
@@ -249,13 +256,13 @@ void DisplacedMuonIsolation::produce(edm::Event& event, const edm::EventSetup& s
                 my_iso_newTk += itrack.pt();
               
               // then compute isolation using propagated info 
-              float dr_at_ecal = deltaR(eta_ecal_, phi_ecal_, trk_eta_ecal_, trk_phi_ecal_);
+              float dr_at_ecal = deltaR(muon_eta_at_ecal, muon_phi_at_ecal, trk_eta_ecal_, trk_phi_ecal_);
               if ( dr_at_ecal <= theDR_Max_ && dr_at_ecal > theDR_Min_){
                 my_iso_newDR += itrack.pt();
                 
-                if ( fabs(mu.vz() - itrack.vz()) < 0.2){
+                if ( std::abs(mu.vz() - itrack.vz()) < 0.2){
                   my_iso_newDR_dz0p2 += itrack.pt();
-                  if ( fabs(itrack.dxy(bsPosition)) < 0.1)
+                  if ( std::abs(itrack.dxy(bsPosition)) < 0.1)
                     my_iso_newDR_dz0p2_dxy0p1 += itrack.pt();
                 }    
               }      
@@ -265,12 +272,14 @@ void DisplacedMuonIsolation::produce(edm::Event& event, const edm::EventSetup& s
         } // end if mu tt is valid 
       } // end if mu has a track      
       
-      v_iso0.at(muIndex) = my_iso_newTk;
-      v_iso1.at(muIndex) = my_iso_newDR;
-      v_iso2.at(muIndex) = my_iso_newDR_dz0p2;
-      v_iso3.at(muIndex) = my_iso_newDR_dz0p2_dxy0p1;
-      v_eta_ecal.at(muIndex) = muon_eta_at_ecal;
-      v_phi_ecal.at(muIndex) = muon_phi_at_ecal;
+      v_iso0[muIndex] = my_iso_newTk;
+      v_iso1[muIndex] = my_iso_newDR;
+      v_iso2[muIndex] = my_iso_newDR_dz0p2;
+      v_iso3[muIndex] = my_iso_newDR_dz0p2_dxy0p1;
+      v_eta_ecal[muIndex] = muon_eta_at_ecal;
+      v_phi_ecal[muIndex] = muon_phi_at_ecal;
+      v_eta_mb2[muIndex] = muon_eta_at_mb2;
+      v_phi_mb2[muIndex] = muon_phi_at_mb2;
     } // end loop on muons 
 
     std::unique_ptr<edm::ValueMap<float>> vm_iso0(new edm::ValueMap<float>());
@@ -309,6 +318,19 @@ void DisplacedMuonIsolation::produce(edm::Event& event, const edm::EventSetup& s
     filler_phi.insert(recoMuons, v_phi_ecal.begin(), v_phi_ecal.end());
     filler_phi.fill();
     event.put(std::move(vm_phi), "phiAtEcal"); 
+
+    // now save muon coordinates at MB2 surface
+    std::unique_ptr<edm::ValueMap<float>> vm_etamb2(new edm::ValueMap<float>());
+    edm::ValueMap<float>::Filler filler_etamb2(*vm_etamb2);
+    filler_etamb2.insert(recoMuons, v_eta_mb2.begin(), v_eta_mb2.end());
+    filler_etamb2.fill();
+    event.put(std::move(vm_etamb2), "etaAtMB2"); 
+  
+    std::unique_ptr<edm::ValueMap<float>> vm_phimb2(new edm::ValueMap<float>());
+    edm::ValueMap<float>::Filler filler_phimb2(*vm_phimb2);
+    filler_phimb2.insert(recoMuons, v_phi_mb2.begin(), v_phi_mb2.end());
+    filler_phimb2.fill();
+    event.put(std::move(vm_phimb2), "phiAtMB2"); 
 }
 
 ReferenceCountingPointer<BoundCylinder> DisplacedMuonIsolation::theBarrel_ = nullptr;
