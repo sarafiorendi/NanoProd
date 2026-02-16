@@ -1,0 +1,95 @@
+skim:
+  input_tree: Events
+  other_trees:
+    - LuminosityBlocks
+    - Runs
+  sel_ref: selection
+  column_filters:
+    - drop ^(n|)boostedTau(_.*|)$
+    - drop ^(n|)SoftActivityJet(.*|)$
+    - drop ^(n|)IsoTrack(_.*|)$
+    - drop ^(n|)GenIsolatedPhoton(_.*|)$
+    - drop ^(n|)GenProton(_.*|)$
+    - drop ^(n|)GenDressedLepton(_.*|)$
+    - drop ^(n|)GenIsolatedPhoton(_.*|)$
+    - drop ^(n|)Proton(_.*|)$
+    - drop ^(n|)PPSLocalTrack(_.*|)$
+    - drop ^(n|)FatJet(_.*|)$
+    - drop ^(n|)LowPtElectron(_.*|)$
+    - drop ^L1_.*$
+    - drop ^HLT_Rsq.*$
+    - drop ^HLT_DoublePhoton.*$
+    - drop ^HLT_DoubleMu.*$
+    - drop ^HLT_DoubleL2Mu.*
+    - drop ^HLT_DoubleEle.*
+    - drop ^HLT_BTag.*
+    - drop ^HLT_Mu8_IP.*
+    - drop ^HLT_Mu9_IP.*
+    - drop ^HLT_Mu12_IP.*
+    - drop ^HLT_Mu12_IP.*
+    - drop ^HLT_L1.*
+    - drop ^HLT_Mu23_TrkIsoVVL_Ele12_.*
+    - drop ^HLT_Mu10_TrkIsoVVL_DiPFJet.*
+    - drop .*FivePFJet.*
+    - drop .*QuadPFJet1.*
+    - drop ^HTXS_.*
+    - drop ^.*_btagUPar.*
+    - drop ^.*_probDM1UParT.*
+    - drop ^.*Upsilon.*
+    - drop ^HLT_Uncorrected.*
+    - drop ^HLT_Dimuon.*
+    - drop ^HLT_CDC.*
+    - drop ^HLT_QuadPFJet.*
+    - drop ^.*Calibration.*
+    - drop ^.*Scouting.*
+    - drop ^.*LastCollisionInTrain.*
+    - drop ^HLT_Mu12_.*
+    - drop ^HLT_Mu19_.*
+    - drop ^HLT_Mu17_.*
+    - drop ^HLT_*.PFBTag.*$
+    - drop ^HLT_Mu3_.*$
+    - drop ^HLT_Diphoton.*$
+    - drop ^HLT_IsoMu24_TwoProngs.*
+    - drop ^HLT.*_Ele.*_Ele.*
+    - drop ^HLT.*ExpressMuons.*
+    - drop ^HLT.*DiSC.*
+    - drop ^HLT.*DiEle.*
+    - drop ^HLT.*Dimuon.*
+    - drop ^HLT.*Beamspot.*
+    - drop ^HLT.*Fwd.*
+    - drop ^HLT.*Quad.*
+    - drop ^HLT.*Five.*
+    - drop ^HLT.*Triple.*
+    - drop ^HLT.*ZeroBias.*
+    - drop ^HLT.*SoftDrop.*
+    - drop ^HLT.*_Tau3Mu.*
+    - drop ^HLT.*_Mu.*_TkMu.*
+    - drop ^HLT.*Delay.*
+    - drop ^HLT.*Btag.*
+    - drop ^HLT.*BTag.*    
+    - drop ^HLT.*Mu.*Ele*    
+    
+
+skim_failed:
+  input_tree: Events
+  output_tree: EventsNotSelected
+  sel_ref: selection
+  invert_sel: true
+  column_filters:
+    - drop ^.*$
+    - keep run
+    - keep luminosityBlock
+    - keep event
+    - keep genWeight
+    - keep ^Pileup_(nPU|nTrueInt)$
+    - keep ^(n|)LHE.*$
+    - keep ^(n|)GenPart(_.*|)$
+    - keep ^(n|)GenVisTau(_.*|)$
+    - drop ^HTXS_.*$
+    - keep ^Generator_.*$
+
+
+selection: "
+  return true;
+  
+"  
