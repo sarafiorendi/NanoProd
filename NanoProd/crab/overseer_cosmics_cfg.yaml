@@ -3,8 +3,8 @@ params:
   customise: NanoProd/NanoProd/customizeStau.customizeStau
   outputs:
     - file: nano.root
-      crabOutput: 'T3_US_FNALLPC:/store/user/lpcdisptau/displacedTaus/nanoprod/Run3_Summer22_chs_AK4PFCands_v15' #TT2_CH_CERN:/store/user/fiorendi/displacedTaus/Run3_Summer22_chs_AK4PFCands_newHPS_v3
-      finalOutput: 'T3_US_FNALLPC:/store/user/lpcdisptau/displacedTaus/nanoprod/summary/Run3_Summer22_chs_AK4PFCands_v15' #T2_CH_CERN:/store/user/fiorendi/displacedTaus/Run3_Summer22_chs_AK4PFCands_newHPS_v3 #     
+      crabOutput: 'T3_US_FNALLPC:/store/user/lpcdisptau/displacedTaus/nanoprod/Run3_Summer22_chs_AK4PFCands_v17' #TT2_CH_CERN:/store/user/fiorendi/displacedTaus/Run3_Summer22_chs_AK4PFCands_newHPS_v3
+      finalOutput: 'T3_US_FNALLPC:/store/user/lpcdisptau/displacedTaus/nanoprod/summary/Run3_Summer22_chs_AK4PFCands_v17' #T2_CH_CERN:/store/user/fiorendi/displacedTaus/Run3_Summer22_chs_AK4PFCands_newHPS_v3 #     
       skimCfg: skim_cosmics.yaml
       skimSetup: skim
       skimSetupFailed: skim_failed
@@ -40,7 +40,7 @@ localProcessing:
   maxRuntime: 48 # hours
 targetOutputFileSize: 512 # MiB, target size of each nano file after the postProcessing
 renewKerberosTicket: True
-htmlReport: 'T3_CH_CERNBOX:/store/user/fiorendi/www/displaced_taus/report_Run3_Summer22_chs_AK4PFCands_v15_cosmics' #T3_CH_CERNBOX:/store/user/username/www/XXX
+htmlReport: 'T3_CH_CERNBOX:/store/user/fiorendi/www/displaced_taus/report_Run3_Summer22_chs_AK4PFCands_v17_cosmics' #T3_CH_CERNBOX:/store/user/username/www/XXX
 # htmlReport: 'T3_CH_CERNBOX:/store/user/fiorendi/www/displaced_taus/report_Run3_Summer22_chs_AK4PFCands_v12_ecalCoords_moresamples' #T3_CH_CERNBOX:/store/user/username/www/XXX
 whitelistFinalRecovery:
   - T1_DE_KIT
