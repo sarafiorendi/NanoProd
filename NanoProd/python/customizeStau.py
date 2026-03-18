@@ -86,9 +86,11 @@ def customize_process_and_associate(process, isMC, useCHSJets = True, isCosmics 
                 fallbackToME1 = cms.bool(False),
                 cosmicPropagationHypothesis = cms.bool(False),
                 useMB2InOverlap = cms.bool(False),
-                propagatorAlong = cms.ESInputTag("", "SteppingHelixPropagatorAlong"),
+                propagatorAlong = cms.ESInputTag("", "SteppingHelixPropagatorOpposite"),
+#                 propagatorAlong = cms.ESInputTag("", "SteppingHelixPropagatorAlong"),
                 propagatorAny = cms.ESInputTag("", "SteppingHelixPropagatorAny"),
-                propagatorOpposite = cms.ESInputTag("", "SteppingHelixPropagatorOpposite")
+                propagatorOpposite = cms.ESInputTag("", "SteppingHelixPropagatorAlong")
+#                 propagatorOpposite = cms.ESInputTag("", "SteppingHelixPropagatorOpposite")
           ),
     )
     d_displacedMuonIsoVars = {
@@ -100,6 +102,12 @@ def customize_process_and_associate(process, isMC, useCHSJets = True, isCosmics 
           "phi_at_ecal":              ExtVar("disMuonIsolation:phiAtEcal"          , float, doc = "phi when muon traj propagated at ECAL surface"),
           "eta_at_mb2":               ExtVar("disMuonIsolation:etaAtMB2"           , float, doc = "eta when muon traj propagated at MB2 surface"),
           "phi_at_mb2":               ExtVar("disMuonIsolation:phiAtMB2"           , float, doc = "phi when muon traj propagated at MB2 surface"),
+          "x_at_mb2":                 ExtVar("disMuonIsolation:xAtMB2"             , float, doc = "x when muon traj propagated at MB2 surface"),
+          "y_at_mb2":                 ExtVar("disMuonIsolation:yAtMB2"             , float, doc = "y when muon traj propagated at MB2 surface"),
+          "z_at_mb2":                 ExtVar("disMuonIsolation:zAtMB2"             , float, doc = "z when muon traj propagated at MB2 surface"),
+          "px_at_mb2":                 ExtVar("disMuonIsolation:pxAtMB2"             , float, doc = "px when muon traj propagated at MB2 surface"),
+          "py_at_mb2":                 ExtVar("disMuonIsolation:pyAtMB2"             , float, doc = "py when muon traj propagated at MB2 surface"),
+          "pz_at_mb2":                 ExtVar("disMuonIsolation:pzAtMB2"             , float, doc = "pz when muon traj propagated at MB2 surface"),
     }
 
     process.disMuonTable = simplePATMuonFlatTableProducer.clone(
@@ -172,7 +180,12 @@ def customize_process_and_associate(process, isMC, useCHSJets = True, isCosmics 
             dtStationsWithValidHits = Var("? isStandAloneMuon ? standAloneMuon().hitPattern().dtStationsWithValidHits() : 0", "uint8", doc = "number of dt stations with hits"),
             cscStationsWithValidHits = Var("? isStandAloneMuon ? standAloneMuon().hitPattern().cscStationsWithValidHits() : 0", "uint8", doc = "number of csc stations with hits"),
             staTrackNormChi2 = Var("? isStandAloneMuon ? standAloneMuon().normalizedChi2() : 0", "uint8", doc = "nsta track normalizedChi2"),
-            pca_phi = Var("? isStandAloneMuon ? standAloneMuon().referencePoint().phi() : 0", "uint8", doc = "phi at the point of closest approch"),
+            pca_phi = Var("? isStandAloneMuon ? standAloneMuon().referencePoint().phi() : 0", float, doc = "phi at the point of closest approch"),
+            pca_x = Var("? isStandAloneMuon ? standAloneMuon().referencePoint().x() : -999", float, doc = "x at the point of closest approch"),
+            pca_y = Var("? isStandAloneMuon ? standAloneMuon().referencePoint().y() : -999", float, doc = "y at the point of closest approch"),
+            pca_z = Var("? isStandAloneMuon ? standAloneMuon().referencePoint().z() : -999", float, doc = "z at the point of closest approch"),
+            px   = Var("px()", float, doc = "px", precision=6),
+            py   = Var("py()", float, doc = "py", precision=6),
 
             #Sim Variables
 #             simType = Var("? simType() ? simType() : -99",int,doc="simType"),
@@ -319,23 +332,41 @@ def customTrajPropagation(process, isMC):
           "GenMuonPropagator",
           src = process.btvGenTable.src,
           genMuPropagator2nd = cms.PSet(
-                useTrack = cms.string("none"),  # 'none' to use Candidate P4; or 'tracker', 'muon', 'global'
-                useState = cms.string("atVertex"), # 'innermost' and 'outermost' require the TrackExtra / atVertex
+                useTrack = cms.string("muon"),  # 'none' to use Candidate P4; or 'tracker', 'muon', 'global'
+                useState = cms.string("innermost"), # 'innermost' and 'outermost' require the TrackExtra / atVertex
                 useSimpleGeometry = cms.bool(True),
         	useStation2 = cms.bool(True),
                 fallbackToME1 = cms.bool(False),
-                cosmicPropagationHypothesis = cms.bool(False),
+                cosmicPropagationHypothesis = cms.bool(True), ## was false for v15 production
+                ## If dot < 0 → momentum points toward the origin
+                ## If dot > 0 → momentum points away from the origin
+                ## ic cosmic = true -> will change prop                
                 useMB2InOverlap = cms.bool(False),
                 propagatorAlong = cms.ESInputTag("", "SteppingHelixPropagatorAlong"),
                 propagatorAny = cms.ESInputTag("", "SteppingHelixPropagatorAny"),
                 propagatorOpposite = cms.ESInputTag("", "SteppingHelixPropagatorOpposite")
           ),
+          ## tmp, to delete when nano production
+          propagatorAlong = cms.ESInputTag("", "SteppingHelixPropagatorAlong"),
+          propagatorAny = cms.ESInputTag("", "SteppingHelixPropagatorAny"),
+          propagatorOpposite = cms.ESInputTag("", "SteppingHelixPropagatorOpposite"),
+          reco = cms.InputTag("slimmedDisplacedMuons", "", "PAT"),
     )
     d_genMuonVars = {
           "eta_at_ecal": ExtVar("genMuonPropagation:etaAtEcal" , float, doc = "eta when muon traj propagated at ECAL surface"),
           "phi_at_ecal": ExtVar("genMuonPropagation:phiAtEcal" , float, doc = "phi when muon traj propagated at ECAL surface"),
           "eta_at_mb2" : ExtVar("genMuonPropagation:etaAtMB2"  , float, doc = "eta when muon traj propagated at MB2 surface"),
           "phi_at_mb2" : ExtVar("genMuonPropagation:phiAtMB2"  , float, doc = "phi when muon traj propagated at MB2 surface"),
+          "x_at_mb2"   : ExtVar("genMuonPropagation:xAtMB2"  , float, doc = "x when muon traj propagated at MB2 surface"),
+          "y_at_mb2"   : ExtVar("genMuonPropagation:yAtMB2"  , float, doc = "y when muon traj propagated at MB2 surface"),
+          "z_at_mb2"   : ExtVar("genMuonPropagation:zAtMB2"  , float, doc = "z when muon traj propagated at MB2 surface"),
+          "px_at_mb2"  : ExtVar("genMuonPropagation:pxAtMB2"  , float, doc = "px when muon traj propagated at MB2 surface"),
+          "py_at_mb2"  : ExtVar("genMuonPropagation:pyAtMB2"  , float, doc = "py when muon traj propagated at MB2 surface"),
+          "pz_at_mb2"  : ExtVar("genMuonPropagation:pzAtMB2"  , float, doc = "pz when muon traj propagated at MB2 surface"),
+          "prop_eta_at_mb2" : ExtVar("genMuonPropagation:propEtaAtMB2"  , float, doc = "eta when muon traj propagated at MB2 surface using standard prop"),
+          "prop_phi_at_mb2" : ExtVar("genMuonPropagation:propPhiAtMB2"  , float, doc = "phi when muon traj propagated at MB2 surface using standard prop"),
+          "init_r"     : ExtVar("genMuonPropagation:initr"  , float, doc = "initial r"),
+          "init_z"     : ExtVar("genMuonPropagation:initz"  , float, doc = "initial z"),
     }
     
     process.btvGenTable.externalVariables = cms.PSet()

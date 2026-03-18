@@ -22,6 +22,7 @@
 #include "MagneticField/Records/interface/IdealMagneticFieldRecord.h"
 #include "MuonAnalysis/MuonAssociators/interface/PropagateToMuonSetup.h"
 
+typedef std::pair<TrajectoryStateOnSurface, double> TsosPath;
 
 constexpr float epsilon = 0.001;
 /** Hard-wired numbers defining the surfaces on which the crystal front faces lie. */
@@ -57,6 +58,20 @@ static BoundDisk* initPositiveEcalEndcap() {
 }      
 
 
+template<typename T>
+void putValueMap(edm::Event& event,
+                 const edm::Handle<std::vector<reco::GenParticle>>& src,
+                 const std::vector<T>& values,
+                 const std::string& label)
+{
+    auto vm = std::make_unique<edm::ValueMap<T>>();
+    typename edm::ValueMap<T>::Filler filler(*vm);
+    filler.insert(src, values.begin(), values.end());
+    filler.fill();
+    event.put(std::move(vm), label);
+}
+
+
 class GenMuonPropagator : public edm::stream::EDProducer<> {
 public:
     explicit GenMuonPropagator(const edm::ParameterSet&);
@@ -76,6 +91,10 @@ private:
 
     const edm::EDGetTokenT<std::vector<reco::GenParticle>> genPartToken_;
     const PropagateToMuonSetup genSt2propSetup_;
+    edm::ESGetToken<Propagator, TrackingComponentsRecord> propAlongToken_;
+    edm::ESGetToken<Propagator, TrackingComponentsRecord> propOppositeToken_;
+    const edm::EDGetTokenT<std::vector<pat::Muon>> muonsToken_;
+    
     edm::ESGetToken<MagneticField, IdealMagneticFieldRecord> const idealMagneticFieldRecordToken_;
 };
 
@@ -84,6 +103,9 @@ GenMuonPropagator::GenMuonPropagator(const edm::ParameterSet& cfg)
     : 
       genPartToken_{consumes<std::vector<reco::GenParticle>>( cfg.getParameter<edm::InputTag>("src") )},
       genSt2propSetup_(cfg.getParameter<edm::ParameterSet>("genMuPropagator2nd"), consumesCollector()),
+      propAlongToken_{esConsumes<Propagator, TrackingComponentsRecord>(cfg.getParameter<edm::ESInputTag>("propagatorAlong"))},
+      propOppositeToken_{esConsumes<Propagator, TrackingComponentsRecord>(cfg.getParameter<edm::ESInputTag>("propagatorOpposite"))},
+      muonsToken_{consumes<std::vector<pat::Muon>>(  cfg.getParameter<edm::InputTag>("reco"))},
       idealMagneticFieldRecordToken_(esConsumes())
 {  
     if (!theBarrel_){
@@ -96,6 +118,16 @@ GenMuonPropagator::GenMuonPropagator(const edm::ParameterSet& cfg)
     produces<edm::ValueMap<float>>("phiAtEcal"); 
     produces<edm::ValueMap<float>>("etaAtMB2"); 
     produces<edm::ValueMap<float>>("phiAtMB2"); 
+    produces<edm::ValueMap<float>>("xAtMB2"); 
+    produces<edm::ValueMap<float>>("yAtMB2"); 
+    produces<edm::ValueMap<float>>("zAtMB2"); 
+    produces<edm::ValueMap<float>>("pxAtMB2"); 
+    produces<edm::ValueMap<float>>("pyAtMB2"); 
+    produces<edm::ValueMap<float>>("pzAtMB2"); 
+    produces<edm::ValueMap<float>>("propEtaAtMB2"); 
+    produces<edm::ValueMap<float>>("propPhiAtMB2"); 
+    produces<edm::ValueMap<float>>("initr"); 
+    produces<edm::ValueMap<float>>("initz"); 
 }
 
 void GenMuonPropagator::produce(edm::Event& event, const edm::EventSetup& setup) {
@@ -111,12 +143,24 @@ void GenMuonPropagator::produce(edm::Event& event, const edm::EventSetup& setup)
     PropagatorWithMaterial forwardPropagatorECAL(alongMomentum, 0.1057, bField);
 
     auto const genSt2prop = genSt2propSetup_.init(setup);
+    auto const& propagatorAlong = setup.getData(propAlongToken_);
+    auto const& propagatorOpposite = setup.getData(propOppositeToken_);
 
     const size_t genPart_size = genParticles->size();
     std::vector <Float_t> v_eta_ecal(genPart_size, -99);
     std::vector <Float_t> v_phi_ecal(genPart_size, -99);
     std::vector <Float_t> v_eta_mb2(genPart_size, -99);
     std::vector <Float_t> v_phi_mb2(genPart_size, -99);
+    std::vector <Float_t> v_x_mb2(genPart_size, -9999);
+    std::vector <Float_t> v_y_mb2(genPart_size, -9999);
+    std::vector <Float_t> v_z_mb2(genPart_size, -9999);
+    std::vector <Float_t> v_px_mb2(genPart_size, -99);
+    std::vector <Float_t> v_py_mb2(genPart_size, -99);
+    std::vector <Float_t> v_pz_mb2(genPart_size, -99);
+    std::vector <Float_t> v_prop_eta_mb2(genPart_size, -99);
+    std::vector <Float_t> v_prop_phi_mb2(genPart_size, -99);
+    std::vector <Float_t> v_init_r(genPart_size, -99);
+    std::vector <Float_t> v_init_z(genPart_size, -99);
 
     for (size_t jgen = 0; jgen < genPart_size; jgen++) {
       
@@ -125,6 +169,9 @@ void GenMuonPropagator::produce(edm::Event& event, const edm::EventSetup& setup)
       int status = genMu.status();
       if (abs(pdgId) != 13 || status != 1) continue;
   
+//       std::cout << "genParticle \t\t\t\t\t\t\t\t " << genMu.eta() ;// << std::endl;
+//       std::cout << "\t " << genMu.phi() ;// << std::endl;
+//       std::cout << "\t " << genMu.pt() << std::endl;
       math::XYZTLorentzVector p4 = genMu.p4();
       math::XYZPoint vertex = genMu.vertex();
       GlobalPoint vtxPos(vertex.x(), vertex.y(), vertex.z()); 
@@ -147,36 +194,108 @@ void GenMuonPropagator::produce(edm::Event& event, const edm::EventSetup& setup)
 
       TrajectoryStateOnSurface genStateAtMB2 = genSt2prop.extrapolate(initialState);
       if (genStateAtMB2.isValid()){
-        v_eta_mb2[jgen] = genStateAtMB2.globalPosition().eta();
-        v_phi_mb2[jgen] = genStateAtMB2.globalPosition().phi(); 
+        v_prop_eta_mb2[jgen] = genStateAtMB2.globalPosition().eta();
+        v_prop_phi_mb2[jgen] = genStateAtMB2.globalPosition().phi(); 
       }
-    } // end loop on GenPart  
+      
+      // alternative way
+      const Surface::RotationType dummyRot;
+      float radius_cyl = 523.854; //820.;
+      float z_cyl = 659; // 1500;
+      Cylinder::CylinderPointer theTargetCylinder =
+        Cylinder::build(Surface::PositionType(0., 0., 0.), dummyRot, radius_cyl);
+//       std::cout << "initial state: 	" << initialState.position().perp() ; // << std::endl;
+//       std::cout <<"\t " << initialState.position().z() ;// << std::endl;
+//       std::cout <<"\t " << initialState.position().eta() ;// << std::endl;
+//       std::cout <<"\t " << initialState.position().phi() ; // << std::endl;
+//       std::cout <<"\t " << initialState.momentum().eta() ;// << std::endl;
+//       std::cout <<"\t " << initialState.momentum().phi() << std::endl;
+      v_init_r[jgen] = initialState.position().perp();
+      v_init_z[jgen] = initialState.position().z(); 
+  
+      bool isInsideInitial = 
+        initialState.position().perp() < radius_cyl && initialState.position().z() >= -z_cyl && initialState.position().z() <= z_cyl;
+      bool isExternalToSurface = 
+        initialState.position().perp() > radius_cyl || initialState.position().z() >= -z_cyl || initialState.position().z() <= z_cyl;
+      bool isPointingTwrOrigin = 
+        initialState.momentum().dot(GlobalVector(initialState.position().x(), initialState.position().y(), initialState.position().z())) < 0  ;
+      
+//       const Propagator* selectedPropagator = isInsideInitial ? &propagatorAlong : &propagatorAlong;
+      const Propagator* selectedPropagator = (isExternalToSurface == isPointingTwrOrigin) ? &propagatorAlong : &propagatorOpposite ;
+      TsosPath tsosPath = selectedPropagator->propagateWithPath(initialState, *theTargetCylinder);
+      if (!tsosPath.first.isValid()) {
+//         std::cout << "not valid alternative prop" << std::endl;
+//           return false;
+      }
+      else{
+//         std::cout << "tsos \t\t" <<
+//           tsosPath.first.globalPosition().perp() << "\t " <<
+//           tsosPath.first.globalPosition().z() << "\t " <<
+//           tsosPath.first.globalPosition().eta() << "\t " <<
+//           tsosPath.first.globalPosition().phi() << "\t " <<
+//           tsosPath.first.globalMomentum().eta() << "\t " <<
+//           tsosPath.first.globalMomentum().phi() << "\t " <<
+//           std::endl;
+          v_eta_mb2[jgen] = tsosPath.first.globalPosition().eta();
+          v_phi_mb2[jgen] = tsosPath.first.globalPosition().phi(); 
+          v_x_mb2[jgen] = tsosPath.first.globalPosition().x();
+          v_y_mb2[jgen] = tsosPath.first.globalPosition().y(); 
+          v_z_mb2[jgen] = tsosPath.first.globalPosition().z(); 
+          v_px_mb2[jgen] = tsosPath.first.globalMomentum().x();
+          v_py_mb2[jgen] = tsosPath.first.globalMomentum().y(); 
+          v_pz_mb2[jgen] = tsosPath.first.globalMomentum().z(); 
+      }
+//       if (genStateAtMB2.isValid()){
+//         std::cout << "original MB2:   " << 
+//           genStateAtMB2.globalPosition().perp() << "\t " <<
+//           genStateAtMB2.globalPosition().z() << "\t " <<
+//           genStateAtMB2.globalPosition().eta() << "\t " <<
+//           genStateAtMB2.globalPosition().phi() << "\t " <<
+//           genStateAtMB2.globalMomentum().eta() << "\t " <<
+//           genStateAtMB2.globalMomentum().phi() << "\t " <<
+//           std::endl;
+//       }
+//       if (checkFinalZ) {
+//           bool withinZRange = tsosPath.first.globalPosition().z() >= minZ &&
+//                               tsosPath.first.globalPosition().z() <= maxZ;
+//           return withinZRange;
+//       }
+    } // end loop on GenPart
+    
+    // tmp loop on reco
+//     edm::Handle<std::vector<pat::Muon>> recoMuons;
+//     event.getByToken(muonsToken_, recoMuons);
+//     const size_t muons_size = recoMuons->size();
+//     for(size_t muIndex = 0; muIndex < muons_size; ++muIndex)
+//     {
+//       const auto& mu = recoMuons->at(muIndex);
+//         std::cout << "reco muon: \t\t\t\t\t\t\t\t   " << 
+//           mu.eta() << "\t " <<
+//           mu.phi() << "\t " <<
+//           mu.pt() << "\t " <<
+// //           mu.phi() << "\t " <<
+//           std::endl;
+//     }
+//         std::cout << "\t\t" <<
+//           std::endl;
 
     // now save muon coordinates at ECAL surface
-    std::unique_ptr<edm::ValueMap<float>> vm_eta(new edm::ValueMap<float>());
-    edm::ValueMap<float>::Filler filler_eta(*vm_eta);
-    filler_eta.insert(genParticles, v_eta_ecal.begin(), v_eta_ecal.end());
-    filler_eta.fill();
-    event.put(std::move(vm_eta), "etaAtEcal"); 
-
-    std::unique_ptr<edm::ValueMap<float>> vm_phi(new edm::ValueMap<float>());
-    edm::ValueMap<float>::Filler filler_phi(*vm_phi);
-    filler_phi.insert(genParticles, v_phi_ecal.begin(), v_phi_ecal.end());
-    filler_phi.fill();
-    event.put(std::move(vm_phi), "phiAtEcal"); 
-
+    putValueMap(event, genParticles, v_eta_ecal, "etaAtEcal");
+    putValueMap(event, genParticles, v_phi_ecal, "phiAtEcal");
     // now save muon coordinates at MB2 surface
-    std::unique_ptr<edm::ValueMap<float>> vm_etamb2(new edm::ValueMap<float>());
-    edm::ValueMap<float>::Filler filler_etamb2(*vm_etamb2);
-    filler_etamb2.insert(genParticles, v_eta_mb2.begin(), v_eta_mb2.end());
-    filler_etamb2.fill();
-    event.put(std::move(vm_etamb2), "etaAtMB2"); 
+    putValueMap(event, genParticles, v_eta_mb2, "etaAtMB2");
+    putValueMap(event, genParticles, v_phi_mb2, "phiAtMB2");
+    putValueMap(event, genParticles, v_x_mb2, "xAtMB2");
+    putValueMap(event, genParticles, v_y_mb2, "yAtMB2");
+    putValueMap(event, genParticles, v_z_mb2, "zAtMB2");
+    putValueMap(event, genParticles, v_px_mb2, "pxAtMB2");
+    putValueMap(event, genParticles, v_py_mb2, "pyAtMB2");
+    putValueMap(event, genParticles, v_pz_mb2, "pzAtMB2");
 
-    std::unique_ptr<edm::ValueMap<float>> vm_phimb2(new edm::ValueMap<float>());
-    edm::ValueMap<float>::Filler filler_phimb2(*vm_phimb2);
-    filler_phimb2.insert(genParticles, v_phi_mb2.begin(), v_phi_mb2.end());
-    filler_phimb2.fill();
-    event.put(std::move(vm_phimb2), "phiAtMB2"); 
+    putValueMap(event, genParticles, v_prop_eta_mb2, "propEtaAtMB2");
+    putValueMap(event, genParticles, v_prop_phi_mb2, "propPhiAtMB2");
+    putValueMap(event, genParticles, v_init_r, "initr");
+    putValueMap(event, genParticles, v_init_z, "initz");
 }
 
 // -----------------------
