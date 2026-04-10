@@ -118,7 +118,6 @@ void GenPFPropagator::produce(edm::Event& event, const edm::EventSetup& setup) {
     float gen_phi_ecal = -99;
     float gen_charge_ = -99;
     
-    std::cout << "[GenPFPropagator]" << std::endl;
     for(size_t igen = 0; igen < genParticles->size();igen++){
       
         // reset output variables
@@ -130,7 +129,6 @@ void GenPFPropagator::produce(edm::Event& event, const edm::EventSetup& setup) {
         int status = genPF.status();
         if (abs(pdgId) != 211 ) continue;
 //         if (abs(pdgId) != 211 || status != 1) continue;
-        std::cout << "\t [GenPFPropagator] pion with pT " << genPF.pt() << std::endl;
   
         math::XYZTLorentzVector p4 = genPF.p4();
         math::XYZPoint vertex = genPF.vertex();

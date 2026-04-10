@@ -66,7 +66,13 @@ def customize_process_and_associate(process, isMC, useCHSJets = True, isCosmics 
     ## unpack PF candidates and lost track, for isolation
     process.load('PhysicsTools.PatAlgos.slimming.unpackedTracksAndVertices_cfi')
     track_to_propagate = 'global'
-    if isCosmics:  track_to_propagate = 'muon'
+    propAlongStr = 'SteppingHelixPropagatorAlong'
+    propOppositeStr = 'SteppingHelixPropagatorOpposite'
+    if isCosmics:  
+        track_to_propagate = 'muon'
+        propAlongStr = 'SteppingHelixPropagatorOpposite'
+        propOppositeStr = 'SteppingHelixPropagatorAlong'
+        
     
     process.disMuonIsolation = cms.EDProducer(
           "DisplacedMuonIsolation",
@@ -86,11 +92,9 @@ def customize_process_and_associate(process, isMC, useCHSJets = True, isCosmics 
                 fallbackToME1 = cms.bool(False),
                 cosmicPropagationHypothesis = cms.bool(False),
                 useMB2InOverlap = cms.bool(False),
-                propagatorAlong = cms.ESInputTag("", "SteppingHelixPropagatorOpposite"),
-#                 propagatorAlong = cms.ESInputTag("", "SteppingHelixPropagatorAlong"),
+                propagatorAlong = cms.ESInputTag("", propAlongStr),
                 propagatorAny = cms.ESInputTag("", "SteppingHelixPropagatorAny"),
-                propagatorOpposite = cms.ESInputTag("", "SteppingHelixPropagatorAlong")
-#                 propagatorOpposite = cms.ESInputTag("", "SteppingHelixPropagatorOpposite")
+                propagatorOpposite = cms.ESInputTag("", propOppositeStr)
           ),
     )
     d_displacedMuonIsoVars = {
@@ -314,7 +318,7 @@ def customize_process_and_associate(process, isMC, useCHSJets = True, isCosmics 
     return process
 
 ## propagation for muons
-def customTrajPropagation(process, isMC):
+def customTrajPropagation(process, isMC, isCosmics):
 
     if not isMC:  return process
     
@@ -332,12 +336,12 @@ def customTrajPropagation(process, isMC):
           "GenMuonPropagator",
           src = process.btvGenTable.src,
           genMuPropagator2nd = cms.PSet(
-                useTrack = cms.string("muon"),  # 'none' to use Candidate P4; or 'tracker', 'muon', 'global'
-                useState = cms.string("innermost"), # 'innermost' and 'outermost' require the TrackExtra / atVertex
+                useTrack = cms.string("global"),  # 'none' to use Candidate P4; or 'tracker', 'muon', 'global'
+                useState = cms.string("atVertex"), # 'innermost' and 'outermost' require the TrackExtra / atVertex
                 useSimpleGeometry = cms.bool(True),
         	useStation2 = cms.bool(True),
                 fallbackToME1 = cms.bool(False),
-                cosmicPropagationHypothesis = cms.bool(True), ## was false for v15 production
+                cosmicPropagationHypothesis = cms.bool(False), ## was false for v15 production
                 ## If dot < 0 → momentum points toward the origin
                 ## If dot > 0 → momentum points away from the origin
                 ## ic cosmic = true -> will change prop                
@@ -350,8 +354,14 @@ def customTrajPropagation(process, isMC):
           propagatorAlong = cms.ESInputTag("", "SteppingHelixPropagatorAlong"),
           propagatorAny = cms.ESInputTag("", "SteppingHelixPropagatorAny"),
           propagatorOpposite = cms.ESInputTag("", "SteppingHelixPropagatorOpposite"),
-          reco = cms.InputTag("slimmedDisplacedMuons", "", "PAT"),
+          isCosmics = cms.bool(isCosmics)
+#           reco = cms.InputTag("slimmedDisplacedMuons", "", "PAT"),
     )
+    if isCosmics:  
+        process.genMuonPropagation.genMuPropagator2nd.cosmicPropagationHypothesis = cms.bool(True)
+        process.genMuonPropagation.genMuPropagator2nd.useTrack = cms.string("muon")
+        process.genMuonPropagation.genMuPropagator2nd.useState = cms.string("innermost")
+    
     d_genMuonVars = {
           "eta_at_ecal": ExtVar("genMuonPropagation:etaAtEcal" , float, doc = "eta when muon traj propagated at ECAL surface"),
           "phi_at_ecal": ExtVar("genMuonPropagation:phiAtEcal" , float, doc = "phi when muon traj propagated at ECAL surface"),
@@ -574,7 +584,7 @@ def addDileptonVertices(process, isMC):
 def customizeStau(process):
 
   isMC = True
-  isCosmics = True
+  isCosmics = False
   useCHS = True
   # customize stored objects
 
@@ -611,7 +621,7 @@ def customizeStau(process):
 
   ## btv custom
   process = BTVCustomNanoAODStaus(process, isMC)
-  process = customTrajPropagation(process, isMC)
+  process = customTrajPropagation(process, isMC, isCosmics)
   process = customPFTrajPropagation(process, isMC)
   
   ## for CHS and select cands

@@ -93,7 +93,8 @@ private:
     const PropagateToMuonSetup genSt2propSetup_;
     edm::ESGetToken<Propagator, TrackingComponentsRecord> propAlongToken_;
     edm::ESGetToken<Propagator, TrackingComponentsRecord> propOppositeToken_;
-    const edm::EDGetTokenT<std::vector<pat::Muon>> muonsToken_;
+    bool isCosmics_;
+//     const edm::EDGetTokenT<std::vector<pat::Muon>> muonsToken_;
     
     edm::ESGetToken<MagneticField, IdealMagneticFieldRecord> const idealMagneticFieldRecordToken_;
 };
@@ -105,7 +106,8 @@ GenMuonPropagator::GenMuonPropagator(const edm::ParameterSet& cfg)
       genSt2propSetup_(cfg.getParameter<edm::ParameterSet>("genMuPropagator2nd"), consumesCollector()),
       propAlongToken_{esConsumes<Propagator, TrackingComponentsRecord>(cfg.getParameter<edm::ESInputTag>("propagatorAlong"))},
       propOppositeToken_{esConsumes<Propagator, TrackingComponentsRecord>(cfg.getParameter<edm::ESInputTag>("propagatorOpposite"))},
-      muonsToken_{consumes<std::vector<pat::Muon>>(  cfg.getParameter<edm::InputTag>("reco"))},
+      isCosmics_(cfg.getParameter<bool>("isCosmics")),
+//       muonsToken_{consumes<std::vector<pat::Muon>>(  cfg.getParameter<edm::InputTag>("reco"))},
       idealMagneticFieldRecordToken_(esConsumes())
 {  
     if (!theBarrel_){
@@ -221,7 +223,8 @@ void GenMuonPropagator::produce(edm::Event& event, const edm::EventSetup& setup)
         initialState.momentum().dot(GlobalVector(initialState.position().x(), initialState.position().y(), initialState.position().z())) < 0  ;
       
 //       const Propagator* selectedPropagator = isInsideInitial ? &propagatorAlong : &propagatorAlong;
-      const Propagator* selectedPropagator = (isExternalToSurface == isPointingTwrOrigin) ? &propagatorAlong : &propagatorOpposite ;
+      const Propagator* selectedPropagator = ((isExternalToSurface == isPointingTwrOrigin) || !isCosmics_ ) ? 
+          &propagatorAlong : &propagatorOpposite ;
       TsosPath tsosPath = selectedPropagator->propagateWithPath(initialState, *theTargetCylinder);
       if (!tsosPath.first.isValid()) {
 //         std::cout << "not valid alternative prop" << std::endl;

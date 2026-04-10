@@ -136,6 +136,7 @@ void PFCandidatePropagator::produce(edm::Event& event, const edm::EventSetup& se
 
         const auto& the_pf = pfCands->at(pfIndex);
         if (abs(the_pf.pdgId()) != 211) continue;
+        if (!the_pf.hasTrackDetails()) continue;
       
         reco::Track pfTrack = the_pf.pseudoTrack() ;
         reco::TransientTrack pfTransientTrack(pfTrack, &(*bFieldHandle));
