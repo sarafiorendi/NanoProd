@@ -74,6 +74,8 @@ def customize_process_and_associate(process, isMC, useCHSJets = True, isCosmics 
         propOppositeStr = 'SteppingHelixPropagatorAlong'
         
     
+    process.load("Configuration.StandardSequences.Reconstruction_cff")
+    process.GlobalTrackingGeometryESProducer = cms.ESProducer("GlobalTrackingGeometryESProducer")
     process.disMuonIsolation = cms.EDProducer(
           "DisplacedMuonIsolation",
           muons = cms.InputTag("slimmedDisplacedMuons", "", "PAT"),

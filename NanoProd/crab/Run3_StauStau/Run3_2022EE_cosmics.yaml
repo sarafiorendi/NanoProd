@@ -3,5 +3,7 @@ config:
     sampleType: mc
     era: Run3_2024
 
-LooseMuCosmic_2024: /LooseMuCosmic_Bin-P-10to3000-T0-Minus50to0_cosmuogen/llunerti-Run3_2024_MINI-df1e99b50d14b85be33e7e4ab518ee3a/USER
+# LooseMuCosmic_2024: /LooseMuCosmic_Bin-P-10to3000-T0-Minus50to0_cosmuogen/llunerti-Run3_2024_MINI-df1e99b50d14b85be33e7e4ab518ee3a/USER
+LooseMuCosmic_2024_DTTrigCalib: /LooseMuCosmic_Bin-P-10to3000-T0-Minus50to0_cosmuogen/lpcdisptau-collisionDTTtrigRcdCalib_MINIAODSIM_LooseMuCosmic-a9e57aa98f9f0dfb586c428429551174/USER
+
 # test_Staus: /Staus_M_100_100mm_13p6TeV_Run3Summer22EE/lpcdisptau-MINIAODSIM-0f6cb413c9f7bbff91a8bbf8151ecb91/USER

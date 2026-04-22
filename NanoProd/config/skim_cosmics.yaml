@@ -16,7 +16,6 @@ skim:
     - drop ^(n|)PPSLocalTrack(_.*|)$
     - drop ^(n|)FatJet(_.*|)$
     - drop ^(n|)LowPtElectron(_.*|)$
-    - drop ^L1_.*$
     - drop ^HLT_Rsq.*$
     - drop ^HLT_DoublePhoton.*$
     - drop ^HLT_DoubleMu.*$
