@@ -1,21 +1,3 @@
-// -*- C++ -*-
-//
-// Package:    DQMOffline/Muon
-// Class:      MuonStationsAnalyzer
-//
-/*
-
- Description:  Makes and fills lots of histograms using the various reco::Muon
-               methods. All code is adapted from Validation/MuonIdentification
-
-
-*/
-//
-// Original Author:  Jacob Ribnik
-//         Created:  Wed Apr 18 13:48:08 CDT 2007
-//
-//
-
 // system include files
 #include <string>
 
@@ -42,6 +24,7 @@
 #include "Geometry/CommonDetUnit/interface/GlobalTrackingGeometry.h"
 #include "Geometry/CSCGeometry/interface/CSCGeometry.h"
 #include "Geometry/Records/interface/GlobalTrackingGeometryRecord.h"
+#include "MuonAnalysis/MuonAssociators/interface/PropagateToMuonSetup.h"
 
 #include "TTree.h"
 #include "TROOT.h"
@@ -51,12 +34,9 @@ public:
   explicit MuonStationsAnalyzer(const edm::ParameterSet&);
   ~MuonStationsAnalyzer() override;
 
-  /* Operations */
   void analyze(const edm::Event&, const edm::EventSetup&) override;
-//   void bookHistograms(DQMStore::IBooker&, edm::Run const&, edm::EventSetup const&) override;
 
 private:
-//   virtual void Fill(MonitorElement*, float);
   void beginJob() override;
   void endJob() override;
 
@@ -68,7 +48,6 @@ private:
   bool useGlobalMuons_;
   bool useTrackerMuonsNotGlobalMuons_;
   bool useGlobalMuonsNotTrackerMuons_;
-  std::string baseFolder_;
 
   edm::Handle<reco::MuonCollection> muonCollectionH_;
   edm::Handle<DTRecSegment4DCollection> dtSegmentCollectionH_;
@@ -77,40 +56,20 @@ private:
 
   const edm::ESGetToken<GlobalTrackingGeometry, GlobalTrackingGeometryRecord> trackingGeomToken_;
 
+  const PropagateToMuonSetup st1propSetup_, st2propSetup_;
+
   edm::Service<TFileService> fs_;
   TTree* outTree_;
+  TTree* muonTree_;
 
   unsigned long evt_n_;
-  float seg_x_, seg_y_, seg_z_;
-  int isUsed_, isCSC_, isDT_;
+  float seg_x_, seg_y_, seg_z_, seg_eta_, seg_phi_, this_muon_pt_;
+  int isUsed_, isCSC_, isDT_, seg_station_;
+
   float muon_pt_, muon_eta_, muon_phi_;
-// 
-//   // trackerMuon == 0; globalMuon == 1
-//   MonitorElement* hNumChambers[4];
-//   MonitorElement* hNumMatches[4];
-//   MonitorElement* hNumChambersNoRPC[4];
-// 
-//   // by station
-//   MonitorElement* hDTNumSegments[4][4];
-//   MonitorElement* hDTDx[4][4];
-//   MonitorElement* hDTPullx[4][4];
-//   MonitorElement* hDTDdXdZ[4][4];
-//   MonitorElement* hDTPulldXdZ[4][4];
-//   MonitorElement* hDTDy[4][3];
-//   MonitorElement* hDTPully[4][3];
-//   MonitorElement* hDTDdYdZ[4][3];
-//   MonitorElement* hDTPulldYdZ[4][3];
-//   MonitorElement* hCSCNumSegments[4][4];
-//   MonitorElement* hCSCDx[4][4];
-//   MonitorElement* hCSCPullx[4][4];
-//   MonitorElement* hCSCDdXdZ[4][4];
-//   MonitorElement* hCSCPulldXdZ[4][4];
-//   MonitorElement* hCSCDy[4][4];
-//   MonitorElement* hCSCPully[4][4];
-//   MonitorElement* hCSCDdYdZ[4][4];
-//   MonitorElement* hCSCPulldYdZ[4][4];
-// 
-//   // segment matching "efficiency"
-//   MonitorElement* hSegmentIsAssociatedBool;
+  int muon_n_matches_, muon_n_chambers_, muon_n_segments_, muon_n_csc_segments_, muon_n_dt_segments_;
+  int muon_is_tracker_, muon_is_sta_, muon_is_glb_, muon_n_hits_out_;
+  float muon_eta_at_mb1_, muon_phi_at_mb1_;
+  float muon_eta_at_mb2_, muon_phi_at_mb2_;
 };
 

@@ -1,130 +1,25 @@
 #include "MuonStationsAnalyzer.h"
 
-MuonStationsAnalyzer::MuonStationsAnalyzer(const edm::ParameterSet& iConfig)
-    : trackingGeomToken_(esConsumes<GlobalTrackingGeometry, GlobalTrackingGeometryRecord>()) {
-  inputMuonCollection_ = consumes<reco::MuonCollection>(iConfig.getParameter<edm::InputTag>("inputMuonCollection"));
+MuonStationsAnalyzer::MuonStationsAnalyzer(const edm::ParameterSet& cfg)
+    : trackingGeomToken_(esConsumes<GlobalTrackingGeometry, GlobalTrackingGeometryRecord>()), 
+      st1propSetup_(cfg.getParameter<edm::ParameterSet>("muPropagator1st"), consumesCollector()),
+      st2propSetup_(cfg.getParameter<edm::ParameterSet>("muPropagator2nd"), consumesCollector())
+
+{
+  inputMuonCollection_ = consumes<reco::MuonCollection>(cfg.getParameter<edm::InputTag>("inputMuonCollection"));
   inputDTRecSegment4DCollection_ =
-      consumes<DTRecSegment4DCollection>(iConfig.getParameter<edm::InputTag>("inputDTRecSegment4DCollection"));
+      consumes<DTRecSegment4DCollection>(cfg.getParameter<edm::InputTag>("inputDTRecSegment4DCollection"));
   inputCSCSegmentCollection_ =
-      consumes<CSCSegmentCollection>(iConfig.getParameter<edm::InputTag>("inputCSCSegmentCollection"));
-  useTrackerMuons_ = iConfig.getUntrackedParameter<bool>("useTrackerMuons");
-  useGlobalMuons_ = iConfig.getUntrackedParameter<bool>("useGlobalMuons");
-  useTrackerMuonsNotGlobalMuons_ = iConfig.getUntrackedParameter<bool>("useTrackerMuonsNotGlobalMuons");
-  useGlobalMuonsNotTrackerMuons_ = iConfig.getUntrackedParameter<bool>("useGlobalMuonsNotTrackerMuons");
-  baseFolder_ = iConfig.getUntrackedParameter<std::string>("baseFolder");
+      consumes<CSCSegmentCollection>(cfg.getParameter<edm::InputTag>("inputCSCSegmentCollection"));
+  useTrackerMuons_ = cfg.getUntrackedParameter<bool>("useTrackerMuons");
+  useGlobalMuons_ = cfg.getUntrackedParameter<bool>("useGlobalMuons");
+  useTrackerMuonsNotGlobalMuons_ = cfg.getUntrackedParameter<bool>("useTrackerMuonsNotGlobalMuons");
+  useGlobalMuonsNotTrackerMuons_ = cfg.getUntrackedParameter<bool>("useGlobalMuonsNotTrackerMuons");
 }
 
 MuonStationsAnalyzer::~MuonStationsAnalyzer() {}
 
-// void MuonStationsAnalyzer::bookHistograms(DQMStore::IBooker& ibooker,
-//                                edm::Run const& /*iRun*/,
-//                                edm::EventSetup const& /* iSetup */) {
-//   char name[100], title[200];
-// 
-// //   ibooker.cd();
-// //   ibooker.setCurrentFolder(baseFolder_);
-//   // trackerMuon == 0; globalMuon == 1; trackerMuon && !globalMuon == 2; globalMuon && !trackerMuon == 3
-// 
-//   hSegmentIsAssociatedBool = ibooker.book1D("hSegmentIsAssociatedBool", "Segment Is Associated Boolean", 2, -0.5, 1.5);
-// 
-//   for (unsigned int i = 0; i < 4; i++) {
-//     if ((i == 0 && !useTrackerMuons_) || (i == 1 && !useGlobalMuons_))
-//       continue;
-//     if ((i == 2 && !useTrackerMuonsNotGlobalMuons_) || (i == 3 && !useGlobalMuonsNotTrackerMuons_))
-//       continue;
-//     if (i == 0)
-//       ibooker.setCurrentFolder(baseFolder_ + "/TrackerMuons");
-//     if (i == 1)
-//       ibooker.setCurrentFolder(baseFolder_ + "/GlobalMuons");
-//     if (i == 2)
-//       ibooker.setCurrentFolder(baseFolder_ + "/TrackerMuonsNotGlobalMuons");
-//     if (i == 3)
-//       ibooker.setCurrentFolder(baseFolder_ + "/GlobalMuonsNotTrackerMuons");
-// 
-//     hNumChambers[i] = ibooker.book1D("hNumChambers", "Number of Chambers", 17, -0.5, 16.5);
-//     hNumMatches[i] = ibooker.book1D("hNumMatches", "Number of Matches", 11, -0.5, 10.5);
-//     hNumChambersNoRPC[i] = ibooker.book1D("hNumChambersNoRPC", "Number of Chambers No RPC", 11, -0.5, 10.5);
-// 
-//     // by station
-//     for (int station = 0; station < 4; ++station) {
-//       sprintf(name, "hDT%iNumSegments", station + 1);
-//       sprintf(title, "DT Station %i Number of Segments (No Arbitration)", station + 1);
-//       hDTNumSegments[i][station] = ibooker.book1D(name, title, 11, -0.5, 10.5);
-// 
-//       sprintf(name, "hDT%iDx", station + 1);
-//       sprintf(title, "DT Station %i Delta X", station + 1);
-//       hDTDx[i][station] = ibooker.book1D(name, title, 100, -100., 100.);
-// 
-//       sprintf(name, "hDT%iPullx", station + 1);
-//       sprintf(title, "DT Station %i Pull X", station + 1);
-//       hDTPullx[i][station] = ibooker.book1D(name, title, 100, -20., 20.);
-// 
-//       sprintf(name, "hDT%iDdXdZ", station + 1);
-//       sprintf(title, "DT Station %i Delta DxDz", station + 1);
-//       hDTDdXdZ[i][station] = ibooker.book1D(name, title, 100, -1., 1.);
-// 
-//       sprintf(name, "hDT%iPulldXdZ", station + 1);
-//       sprintf(title, "DT Station %i Pull DxDz", station + 1);
-//       hDTPulldXdZ[i][station] = ibooker.book1D(name, title, 100, -20., 20.);
-// 
-//       if (station < 3) {
-//         sprintf(name, "hDT%iDy", station + 1);
-//         sprintf(title, "DT Station %i Delta Y", station + 1);
-//         hDTDy[i][station] = ibooker.book1D(name, title, 100, -150., 150.);
-// 
-//         sprintf(name, "hDT%iPully", station + 1);
-//         sprintf(title, "DT Station %i Pull Y", station + 1);
-//         hDTPully[i][station] = ibooker.book1D(name, title, 100, -20., 20.);
-// 
-//         sprintf(name, "hDT%iDdYdZ", station + 1);
-//         sprintf(title, "DT Station %i Delta DyDz", station + 1);
-//         hDTDdYdZ[i][station] = ibooker.book1D(name, title, 100, -2., 2.);
-// 
-//         sprintf(name, "hDT%iPulldYdZ", station + 1);
-//         sprintf(title, "DT Station %i Pull DyDz", station + 1);
-//         hDTPulldYdZ[i][station] = ibooker.book1D(name, title, 100, -20., 20.);
-//       }
-// 
-//       sprintf(name, "hCSC%iNumSegments", station + 1);
-//       sprintf(title, "CSC Station %i Number of Segments (No Arbitration)", station + 1);
-//       hCSCNumSegments[i][station] = ibooker.book1D(name, title, 11, -0.5, 10.5);
-// 
-//       sprintf(name, "hCSC%iDx", station + 1);
-//       sprintf(title, "CSC Station %i Delta X", station + 1);
-//       hCSCDx[i][station] = ibooker.book1D(name, title, 100, -50., 50.);
-// 
-//       sprintf(name, "hCSC%iPullx", station + 1);
-//       sprintf(title, "CSC Station %i Pull X", station + 1);
-//       hCSCPullx[i][station] = ibooker.book1D(name, title, 100, -20., 20.);
-// 
-//       sprintf(name, "hCSC%iDdXdZ", station + 1);
-//       sprintf(title, "CSC Station %i Delta DxDz", station + 1);
-//       hCSCDdXdZ[i][station] = ibooker.book1D(name, title, 100, -1., 1.);
-// 
-//       sprintf(name, "hCSC%iPulldXdZ", station + 1);
-//       sprintf(title, "CSC Station %i Pull DxDz", station + 1);
-//       hCSCPulldXdZ[i][station] = ibooker.book1D(name, title, 100, -20., 20.);
-// 
-//       sprintf(name, "hCSC%iDy", station + 1);
-//       sprintf(title, "CSC Station %i Delta Y", station + 1);
-//       hCSCDy[i][station] = ibooker.book1D(name, title, 100, -50., 50.);
-// 
-//       sprintf(name, "hCSC%iPully", station + 1);
-//       sprintf(title, "CSC Station %i Pull Y", station + 1);
-//       hCSCPully[i][station] = ibooker.book1D(name, title, 100, -20., 20.);
-// 
-//       sprintf(name, "hCSC%iDdYdZ", station + 1);
-//       sprintf(title, "CSC Station %i Delta DyDz", station + 1);
-//       hCSCDdYdZ[i][station] = ibooker.book1D(name, title, 100, -1., 1.);
-// 
-//       sprintf(name, "hCSC%iPulldYdZ", station + 1);
-//       sprintf(title, "CSC Station %i Pull DyDz", station + 1);
-//       hCSCPulldYdZ[i][station] = ibooker.book1D(name, title, 100, -20., 20.);
-//     }  // station
-//   }
-// }
-
-void MuonStationsAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup) {
+void MuonStationsAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& setup) {
   using namespace edm;
   using namespace reco;
 
@@ -134,64 +29,51 @@ void MuonStationsAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSet
 
   evt_n_ = iEvent.id().event();
 
-  geometry_ = iSetup.getHandle(trackingGeomToken_);
+  geometry_ = setup.getHandle(trackingGeomToken_);
+  auto const st1prop = st1propSetup_.init(setup);
+  auto const st2prop = st2propSetup_.init(setup);
 
-//   for (MuonCollection::const_iterator muon = muonCollectionH_->begin(); muon != muonCollectionH_->end(); ++muon) {
-//     // trackerMuon == 0; globalMuon == 1; trackerMuon && !globalMuon == 2; globalMuon && !trackerMuon == 3
-//     for (unsigned int i = 0; i < 4; i++) {
-//       if (i == 0 && (!useTrackerMuons_ || !muon->isTrackerMuon()))
-//         continue;
-//       if (i == 1 && (!useGlobalMuons_ || !muon->isGlobalMuon()))
-//         continue;
-//       if (i == 2 && (!useTrackerMuonsNotGlobalMuons_ || (!(muon->isTrackerMuon() && !muon->isGlobalMuon()))))
-//         continue;
-//       if (i == 3 && (!useGlobalMuonsNotTrackerMuons_ || (!(muon->isGlobalMuon() && !muon->isTrackerMuon()))))
-//         continue;
-// 
-//       hNumChambers[i]->Fill(muon->numberOfChambers());
-//       hNumMatches[i]->Fill(muon->numberOfMatches(Muon::SegmentAndTrackArbitration));
-//       hNumChambersNoRPC[i]->Fill(muon->numberOfChambersCSCorDT());
-// 
-//       // by station
-//       for (int station = 0; station < 4; ++station) {
-//         // only fill num segments if we crossed (or nearly crossed) a chamber
-//         if (muon->trackX(station + 1, MuonSubdetId::DT, Muon::NoArbitration) < 900000)
-//           hDTNumSegments[i][station]->Fill(muon->numberOfSegments(station + 1, MuonSubdetId::DT, Muon::NoArbitration));
-//         Fill(hDTDx[i][station], muon->dX(station + 1, MuonSubdetId::DT, Muon::SegmentAndTrackArbitration));
-//         Fill(hDTPullx[i][station], muon->pullX(station + 1, MuonSubdetId::DT, Muon::SegmentAndTrackArbitration, true));
-//         Fill(hDTDdXdZ[i][station], muon->dDxDz(station + 1, MuonSubdetId::DT, Muon::SegmentAndTrackArbitration));
-//         Fill(hDTPulldXdZ[i][station],
-//              muon->pullDxDz(station + 1, MuonSubdetId::DT, Muon::SegmentAndTrackArbitration, true));
-// 
-//         if (station < 3) {
-//           Fill(hDTDy[i][station], muon->dY(station + 1, MuonSubdetId::DT, Muon::SegmentAndTrackArbitration));
-//           Fill(hDTPully[i][station],
-//                muon->pullY(station + 1, MuonSubdetId::DT, Muon::SegmentAndTrackArbitration, true));
-//           Fill(hDTDdYdZ[i][station], muon->dDyDz(station + 1, MuonSubdetId::DT, Muon::SegmentAndTrackArbitration));
-//           Fill(hDTPulldYdZ[i][station],
-//                muon->pullDyDz(station + 1, MuonSubdetId::DT, Muon::SegmentAndTrackArbitration, true));
-//         }
-// 
-//         // only fill num segments if we crossed (or nearly crossed) a chamber
-//         if (muon->trackX(station + 1, MuonSubdetId::CSC, Muon::NoArbitration) < 900000)
-//           hCSCNumSegments[i][station]->Fill(
-//               muon->numberOfSegments(station + 1, MuonSubdetId::CSC, Muon::NoArbitration));
-//         Fill(hCSCDx[i][station], muon->dX(station + 1, MuonSubdetId::CSC, Muon::SegmentAndTrackArbitration));
-//         Fill(hCSCPullx[i][station],
-//              muon->pullX(station + 1, MuonSubdetId::CSC, Muon::SegmentAndTrackArbitration, true));
-//         Fill(hCSCDdXdZ[i][station], muon->dDxDz(station + 1, MuonSubdetId::CSC, Muon::SegmentAndTrackArbitration));
-//         Fill(hCSCPulldXdZ[i][station],
-//              muon->pullDxDz(station + 1, MuonSubdetId::CSC, Muon::SegmentAndTrackArbitration, true));
-//         Fill(hCSCDy[i][station], muon->dY(station + 1, MuonSubdetId::CSC, Muon::SegmentAndTrackArbitration));
-//         Fill(hCSCPully[i][station],
-//              muon->pullY(station + 1, MuonSubdetId::CSC, Muon::SegmentAndTrackArbitration, true));
-//         Fill(hCSCDdYdZ[i][station], muon->dDyDz(station + 1, MuonSubdetId::CSC, Muon::SegmentAndTrackArbitration));
-//         Fill(hCSCPulldYdZ[i][station],
-//              muon->pullDyDz(station + 1, MuonSubdetId::CSC, Muon::SegmentAndTrackArbitration, true));
-//       }
-//     }
-//   }  // muon
+  for (MuonCollection::const_iterator muon = muonCollectionH_->begin(); muon != muonCollectionH_->end(); ++muon) {
+//       std::cout << "muon pT = " << muon->pt() << std::endl;
+    if (!muon->isMatchesValid())
+      continue;
+    muon_pt_  =  muon->pt();
+    muon_eta_ =  muon->eta();
+    muon_phi_ =  muon->phi();
+    muon_is_tracker_ = muon->isTrackerMuon();
+    muon_is_sta_ = muon->isStandAloneMuon();
+    muon_is_glb_ = muon->isGlobalMuon();
+    muon_n_chambers_ =  muon->numberOfChambersCSCorDT();
+    muon_n_matches_ =  muon->numberOfMatches();  // number of chambers with matched segments
+    muon_n_segments_ = 0;
+    muon_n_csc_segments_ = 0;
+    muon_n_dt_segments_ = 0;
 
+    if (muon->outerTrack().isNonnull()) {
+      muon_n_hits_out_ = muon->outerTrack()->numberOfValidHits();
+    }  
+
+    // this is only to count the number of segments
+    for (std::vector<MuonChamberMatch>::const_iterator chamberMatch = muon->matches().begin();
+         chamberMatch != muon->matches().end();
+         ++chamberMatch) {
+        muon_n_segments_ += chamberMatch->segmentMatches.size();
+    }
+
+    const reco::Muon &mu = (*muon);
+    TrajectoryStateOnSurface stateAtMB1 = st1prop.extrapolate(mu);
+    if (stateAtMB1.isValid()){
+        muon_eta_at_mb1_ = stateAtMB1.globalPosition().eta();
+        muon_phi_at_mb1_ = stateAtMB1.globalPosition().phi();
+    }
+
+    TrajectoryStateOnSurface stateAtMB2 = st2prop.extrapolate(mu);
+    if (stateAtMB2.isValid()){
+        muon_eta_at_mb2_ = stateAtMB2.globalPosition().eta();
+        muon_phi_at_mb2_ = stateAtMB2.globalPosition().phi();
+    }
+    muonTree_->Fill();
+  }
 
   for (DTRecSegment4DCollection::const_iterator segment = dtSegmentCollectionH_->begin();
        segment != dtSegmentCollectionH_->end();
@@ -201,8 +83,12 @@ void MuonStationsAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSet
     LocalError segmentLocalPositionError = segment->localPositionError();
     LocalError segmentLocalDirectionError = segment->localDirectionError();
     bool segmentFound = false;
+    
 
     DetId id = segment->geographicalId();
+    DTChamberId chambId(id);
+    seg_station_ = chambId.station();
+    
     const GeomDet* det = geometry_->idToDet(id);
     if (!det) continue;
     GlobalPoint gpos = det->surface().toGlobal(segmentLocalPosition);
@@ -210,19 +96,31 @@ void MuonStationsAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSet
     seg_y_ = gpos.y();
     seg_z_ = gpos.z();
 
+    seg_eta_ = gpos.eta();
+    seg_phi_ = gpos.phi();
+
+    this_muon_pt_ = -1;
     for (MuonCollection::const_iterator muon = muonCollectionH_->begin(); muon != muonCollectionH_->end(); ++muon) {
       if (!muon->isMatchesValid())
         continue;
 //       std::cout << "muon pT = " << muon->pt() << std::endl;
-      muon_pt_  =  muon->pt();
-      muon_eta_ =  muon->eta();
-      muon_phi_ =  muon->phi();
+//       muon_pt_  =  muon->pt();
+//       muon_eta_ =  muon->eta();
+//       muon_phi_ =  muon->phi();
+//       muon_n_chambers_ =  muon->numberOfChambersCSCorDT();
+//       muon_n_matches_ =  muon->numberOfMatches();  // number of chambers with matched segments
+//       muon_n_segments_ = 0;
+//       muon_n_csc_segments_ = 0;
+//       muon_n_dt_segments_ = 0;
+
+
       for (std::vector<MuonChamberMatch>::const_iterator chamberMatch = muon->matches().begin();
            chamberMatch != muon->matches().end();
            ++chamberMatch) {
         for (std::vector<MuonSegmentMatch>::const_iterator segmentMatch = chamberMatch->segmentMatches.begin();
              segmentMatch != chamberMatch->segmentMatches.end();
              ++segmentMatch) {
+             
           if (fabs(segmentMatch->x - segmentLocalPosition.x()) < 1E-6 &&
               fabs(segmentMatch->y - segmentLocalPosition.y()) < 1E-6 &&
               fabs(segmentMatch->dXdZ - segmentLocalDirection.x() / segmentLocalDirection.z()) < 1E-6 &&
@@ -235,6 +133,7 @@ void MuonStationsAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSet
 //               std::cout << "\t matched segment at local x = " << segmentLocalPosition.x() << std::endl;
 //               std::cout << "\t matched segment at global x = " << gpos.x() << std::endl;
             segmentFound = true;
+            this_muon_pt_ = muon->pt();
             break;
           }
         }  // segmentMatch
@@ -251,6 +150,7 @@ void MuonStationsAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSet
     isDT_ = 1;  
     outTree_->Fill();  
   }  // dt segment
+  
 
   for (CSCSegmentCollection::const_iterator segment = cscSegmentCollectionH_->begin();
        segment != cscSegmentCollectionH_->end();
@@ -269,13 +169,29 @@ void MuonStationsAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSet
     seg_y_ = gpos.y();
     seg_z_ = gpos.z();
 
+    seg_eta_ = gpos.eta();
+    seg_phi_ = gpos.phi();
+
+    this_muon_pt_ = -1;
     for (MuonCollection::const_iterator muon = muonCollectionH_->begin(); muon != muonCollectionH_->end(); ++muon) {
       if (!muon->isMatchesValid())
         continue;
-      muon_pt_  =  muon->pt();
-      muon_eta_ =  muon->eta();
-      muon_phi_ =  muon->phi();
+//       muon_pt_  =  muon->pt();
+//       muon_eta_ =  muon->eta();
+//       muon_phi_ =  muon->phi();
+//       muon_n_chambers_ =  muon->numberOfChambersCSCorDT();
+//       muon_n_matches_  =  muon->numberOfMatches();  // number of chambers with matched segments
+//       muon_n_segments_ = 0;
+//       muon_n_csc_segments_ = 0;
+//       muon_n_dt_segments_ = 0;
 
+      // this is only to count the number of segments
+//       for (std::vector<MuonChamberMatch>::const_iterator chamberMatch = muon->matches().begin();
+//            chamberMatch != muon->matches().end();
+//            ++chamberMatch) {
+//           muon_n_segments_ += chamberMatch->segmentMatches.size();
+//       }
+// 
       for (std::vector<MuonChamberMatch>::const_iterator chamberMatch = muon->matches().begin();
            chamberMatch != muon->matches().end();
            ++chamberMatch) {
@@ -291,6 +207,7 @@ void MuonStationsAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSet
               fabs(segmentMatch->dXdZErr - sqrt(segmentLocalDirectionError.xx())) < 1E-6 &&
               fabs(segmentMatch->dYdZErr - sqrt(segmentLocalDirectionError.yy())) < 1E-6) {
             segmentFound = true;
+            this_muon_pt_ = muon->pt();
             break;
           }
         }  // segmentMatch
@@ -308,35 +225,60 @@ void MuonStationsAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSet
     isCSC_ = 1;  
     isDT_ = 0;  
     outTree_->Fill();  
-//       hSegmentIsAssociatedBool->Fill(1.);
-//     else
-//       hSegmentIsAssociatedBool->Fill(0.);
   }  // csc segment
 }
 
 void MuonStationsAnalyzer::beginJob() {
-  outTree_ = fs_->make<TTree>("muonTree", "muonTree");
+  outTree_ = fs_->make<TTree>("segTree", "segTree");
   outTree_->Branch("evt_n", &evt_n_, "evt_n/I");
   outTree_->Branch("seg_x", &seg_x_, "seg_x/F");
   outTree_->Branch("seg_y", &seg_y_, "seg_x/F");
   outTree_->Branch("seg_z", &seg_z_, "seg_x/F");
-  outTree_->Branch("muon_pt", &muon_pt_, "muon_pt/F");
-  outTree_->Branch("muon_eta", &muon_eta_, "muon_eta/F");
-  outTree_->Branch("muon_phi", &muon_phi_, "muon_phi/F");
+  outTree_->Branch("seg_eta", &seg_eta_, "seg_eta/F");
+  outTree_->Branch("seg_phi", &seg_phi_, "seg_phi/F");
+  outTree_->Branch("seg_station", &seg_station_, "seg_station/I");
+  outTree_->Branch("matched_muon_pt", &this_muon_pt_, "matched_muon_pt/F");
+//   outTree_->Branch("muon_pt", &muon_pt_, "muon_pt/F");
+//   outTree_->Branch("muon_eta", &muon_eta_, "muon_eta/F");
+//   outTree_->Branch("muon_phi", &muon_phi_, "muon_phi/F");
+//   outTree_->Branch("muon_n_chambers", &muon_n_chambers_, "muon_n_chambers/I");
+//   outTree_->Branch("muon_n_matches", &muon_n_matches_, "muon_n_matches/I");
+//   outTree_->Branch("muon_n_segments", &muon_n_segments_, "muon_n_segments/I");
+//   outTree_->Branch("muon_n_csc_segments", &muon_n_csc_segments_, "muon_n_csc_segments/I");
+//   outTree_->Branch("muon_n_dt_segments",  &muon_n_dt_segments_, "muon_n_dt_segments/I");
   outTree_->Branch("isUsed", &isUsed_, "isUsed/I");
   outTree_->Branch("isDT",  &isDT_,  "isDT/I");
   outTree_->Branch("isCSC", &isCSC_, "isCSC/I");
+
+
+  muonTree_ = fs_->make<TTree>("muonTree", "muonTree");
+  muonTree_->Branch("evt_n", &evt_n_, "evt_n/I");
+  muonTree_->Branch("muon_pt", &muon_pt_, "muon_pt/F");
+  muonTree_->Branch("muon_eta", &muon_eta_, "muon_eta/F");
+  muonTree_->Branch("muon_phi", &muon_phi_, "muon_phi/F");
+  muonTree_->Branch("muon_n_hits_out", &muon_n_hits_out_, "muon_n_hits_out/F");
+  
+  muonTree_->Branch("muon_n_chambers", &muon_n_chambers_, "muon_n_chambers/I");
+  muonTree_->Branch("muon_n_matches", &muon_n_matches_, "muon_n_matches/I");
+  muonTree_->Branch("muon_n_segments", &muon_n_segments_, "muon_n_segments/I");
+  muonTree_->Branch("muon_n_csc_segments", &muon_n_csc_segments_, "muon_n_csc_segments/I");
+  muonTree_->Branch("muon_n_dt_segments",  &muon_n_dt_segments_, "muon_n_dt_segments/I");
+  muonTree_->Branch("muon_is_tracker",  &muon_is_tracker_, "muon_is_tracker/I");
+  muonTree_->Branch("muon_is_glb",  &muon_is_glb_, "muon_is_glb/I");
+  muonTree_->Branch("muon_is_sta",  &muon_is_sta_, "muon_is_sta/I");
+  muonTree_->Branch("muon_eta_at_mb1",  &muon_eta_at_mb1_, "muon_eta_at_mb1/F");
+  muonTree_->Branch("muon_phi_at_mb1",  &muon_phi_at_mb1_, "muon_phi_at_mb1/F");
+  muonTree_->Branch("muon_eta_at_mb2",  &muon_eta_at_mb2_, "muon_eta_at_mb2/F");
+  muonTree_->Branch("muon_phi_at_mb2",  &muon_phi_at_mb2_, "muon_phi_at_mb2/F");
+  
 }
 void MuonStationsAnalyzer::endJob() {
   outTree_->GetDirectory()->cd();
   outTree_->Write();
+
+  muonTree_->GetDirectory()->cd();
+  muonTree_->Write();
 }
-// void MuonStationsAnalyzer::Fill(MonitorElement* me, float f) {
-//   if (fabs(f) > 900000)
-//     return;
-//   //if (fabs(f) < 1E-8) return;
-//   me->Fill(f);
-// }
-// 
+
 //define this as a plug-in
 DEFINE_FWK_MODULE(MuonStationsAnalyzer);
