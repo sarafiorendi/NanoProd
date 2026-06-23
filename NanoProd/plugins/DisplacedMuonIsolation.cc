@@ -1,7 +1,3 @@
-/*
- * Add recomputed isolation to displaced muons
- */
-
 #include <memory>
 #include <cmath>
 
@@ -11,21 +7,27 @@
 #include "FWCore/Framework/interface/stream/EDProducer.h"
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
 
-#include "DataFormats/PatCandidates/interface/Muon.h"
 #include "TrackingTools/MaterialEffects/interface/PropagatorWithMaterial.h"
 #include "TrackingTools/Records/interface/TransientTrackRecord.h"
 #include "TrackingTools/TransientTrack/interface/TransientTrack.h"
 #include "TrackingTools/TransientTrack/interface/TransientTrackBuilder.h"
 
+#include "DataFormats/PatCandidates/interface/Muon.h"
 #include "DataFormats/GeometrySurface/interface/Cylinder.h"
 #include "DataFormats/GeometrySurface/interface/BoundCylinder.h"
 #include "DataFormats/GeometrySurface/interface/BoundDisk.h"
 #include "DataFormats/GeometrySurface/interface/SimpleCylinderBounds.h"
 #include "DataFormats/GeometrySurface/interface/SimpleDiskBounds.h"
+#include "DataFormats/DTRecHit/interface/DTRecSegment4DCollection.h"
+#include "DataFormats/CSCRecHit/interface/CSCSegmentCollection.h"
+#include "DataFormats/MuonDetId/interface/MuonSubdetId.h"
+#include "DataFormats/MuonDetId/interface/DTChamberId.h"
+#include "DataFormats/MuonDetId/interface/CSCDetId.h"
 
 #include "MagneticField/Records/interface/IdealMagneticFieldRecord.h"
 #include "MuonAnalysis/MuonAssociators/interface/PropagateToMuonSetup.h"
-
+#include "Geometry/CommonDetUnit/interface/GlobalTrackingGeometry.h"
+#include "Geometry/Records/interface/GlobalTrackingGeometryRecord.h"
 
 constexpr float epsilon = 0.001;
 /** Hard-wired numbers defining the surfaces on which the crystal front faces lie. */
@@ -96,7 +98,12 @@ private:
     const edm::EDGetTokenT<reco::BeamSpot> beamSpotToken_;
     edm::ESGetToken<MagneticField, IdealMagneticFieldRecord> const idealMagneticFieldRecordToken_;
     const PropagateToMuonSetup st2propSetup_;
-    
+    const edm::ESGetToken<GlobalTrackingGeometry, GlobalTrackingGeometryRecord> trackingGeomToken_;
+    edm::ESHandle<GlobalTrackingGeometry> geometry_;   
+
+    edm::EDGetTokenT<DTRecSegment4DCollection>  dtSegmentToken_;
+    edm::EDGetTokenT<CSCSegmentCollection>      cscSegmentToken_;
+ 
     float theDiff_z_;
     float theDiff_r_;
     float theDR_Max_;  
@@ -116,6 +123,13 @@ private:
       float pz_at_mb2 = -9999.f;
     };
 
+    struct MuonSegmentPosition {
+      float avg_x = 0.f;
+      float avg_y = 0.f;
+      float avg_z = 0.f;
+      int n_segments = 0;
+    };
+
 };
 
 
@@ -126,6 +140,9 @@ DisplacedMuonIsolation::DisplacedMuonIsolation(const edm::ParameterSet& cfg)
       beamSpotToken_{consumes<reco::BeamSpot>( cfg.getParameter<edm::InputTag>("beamSpot") )},
       idealMagneticFieldRecordToken_(esConsumes()),
       st2propSetup_(cfg.getParameter<edm::ParameterSet>("muPropagator2nd"), consumesCollector()),
+      trackingGeomToken_(esConsumes<GlobalTrackingGeometry, GlobalTrackingGeometryRecord>()), 
+      dtSegmentToken_{consumes<DTRecSegment4DCollection>(cfg.getParameter<edm::InputTag>("muons"))},
+      cscSegmentToken_{consumes<CSCSegmentCollection>(cfg.getParameter<edm::InputTag>("muons"))},
       theDiff_z_( cfg.getUntrackedParameter<double>("deltaZ")),
       theDiff_r_( cfg.getUntrackedParameter<double>("deltaDxy")),
       theDR_Max_( cfg.getUntrackedParameter<double>("maxDeltaR")),
@@ -152,6 +169,10 @@ DisplacedMuonIsolation::DisplacedMuonIsolation(const edm::ParameterSet& cfg)
     produces<edm::ValueMap<float>>("pxAtMB2"); 
     produces<edm::ValueMap<float>>("pyAtMB2"); 
     produces<edm::ValueMap<float>>("pzAtMB2"); 
+    produces<edm::ValueMap<float>>("sumSegX"); 
+    produces<edm::ValueMap<float>>("sumSegY"); 
+    produces<edm::ValueMap<float>>("sumSegZ"); 
+    produces<edm::ValueMap<float>>("nSeg"); 
 }
 
 void DisplacedMuonIsolation::produce(edm::Event& event, const edm::EventSetup& setup) {
@@ -174,6 +195,12 @@ void DisplacedMuonIsolation::produce(edm::Event& event, const edm::EventSetup& s
     const MagneticField* bField = bFieldHandle.product();
 
     auto const st2prop = st2propSetup_.init(setup);
+    geometry_ = setup.getHandle(trackingGeomToken_);
+
+    edm::Handle<DTRecSegment4DCollection> dtSegmentsH;
+    event.getByToken(dtSegmentToken_, dtSegmentsH);
+    edm::Handle<CSCSegmentCollection> cscSegmentsH;
+    event.getByToken(cscSegmentToken_, cscSegmentsH);
 
     PropagatorWithMaterial forwardPropagatorECAL(alongMomentum, 0.1057, bField); // muon mass
     PropagatorWithMaterial forwardPropagatorECALpion(alongMomentum, 0.139 , bField, 6, false, -1, true); // pion mass
@@ -196,6 +223,10 @@ void DisplacedMuonIsolation::produce(edm::Event& event, const edm::EventSetup& s
     std::vector <Float_t> v_px_mb2(muons_size, -9999);
     std::vector <Float_t> v_py_mb2(muons_size, -9999);
     std::vector <Float_t> v_pz_mb2(muons_size, -9999);
+    std::vector <Float_t> v_seg_x(muons_size, -9999);
+    std::vector <Float_t> v_seg_y(muons_size, -9999);
+    std::vector <Float_t> v_seg_z(muons_size, -9999);
+    std::vector <Float_t> v_n_seg(muons_size, -9999);
     
     float my_iso_newTk = -99.;
     float my_iso_newDR = -99;
@@ -208,7 +239,56 @@ void DisplacedMuonIsolation::produce(edm::Event& event, const edm::EventSetup& s
     {
       const pat::Muon& mu = (*recoMuons)[muIndex];      
       MuonPropagationState muState;
+      MuonSegmentPosition muSegPos;
 
+      if (mu.isMatchesValid()) {
+        for (const auto& chamberMatch : mu.matches()) {
+          if (chamberMatch.segmentMatches.empty()) continue;
+
+          if (chamberMatch.detector() == MuonSubdetId::DT && dtSegmentsH.isValid()) {
+            DTChamberId matchChamber(chamberMatch.id.rawId());
+            for (auto seg = dtSegmentsH->begin(); seg != dtSegmentsH->end(); ++seg) {
+              DTChamberId segChamber(seg->geographicalId().rawId());
+              
+              if (segChamber == matchChamber) {
+                const DetId seg_id = seg->geographicalId();
+                const GeomDet* det = geometry_->idToDet(seg_id);
+                if (!det) continue;
+                const GlobalPoint gpos = det->surface().toGlobal(seg->localPosition());
+//                 std::cout << " DT segment: gpos x/y/z "
+//                           << gpos.x() << " / " << gpos.y() << " / " << gpos.z()
+//                           << std::endl;
+                muSegPos.avg_x      += gpos.x();
+                muSegPos.avg_y      += gpos.y();
+                muSegPos.avg_z      += gpos.z();
+                muSegPos.n_segments += 1;
+              }
+            }
+          }
+
+          else if (chamberMatch.detector() == MuonSubdetId::CSC && cscSegmentsH.isValid()) {
+            CSCDetId matchChamber(chamberMatch.id.rawId());
+            for (auto seg = cscSegmentsH->begin(); seg != cscSegmentsH->end(); ++seg) {
+              CSCDetId segChamber(seg->geographicalId().rawId());
+
+              if (segChamber == matchChamber) {
+                const DetId seg_id = seg->geographicalId();
+                const GeomDet* det = geometry_->idToDet(seg_id);
+                if (!det) continue;
+                const GlobalPoint gpos = det->surface().toGlobal(seg->localPosition());
+//                 std::cout << " CSC segment: gpos x / y / z "
+//                         << gpos.x() << " / " << gpos.y() << " / " << gpos.z()
+//                         << std::endl;
+                muSegPos.avg_x     += gpos.x();
+                muSegPos.avg_y     += gpos.y();
+                muSegPos.avg_z     += gpos.z();
+                muSegPos.n_segments += 1;
+              }  
+            }
+          }
+        } // end loop on chamberMatches
+      } // end if isMatchesValid
+      
       // reset iso variable
       my_iso_newTk = 0;
       my_iso_newDR = 0;
@@ -321,6 +401,10 @@ void DisplacedMuonIsolation::produce(edm::Event& event, const edm::EventSetup& s
       v_px_mb2[muIndex]   = muState.px_at_mb2;
       v_py_mb2[muIndex]   = muState.py_at_mb2;
       v_pz_mb2[muIndex]   = muState.pz_at_mb2;
+      v_seg_x[muIndex]    = muSegPos.avg_x;
+      v_seg_y[muIndex]    = muSegPos.avg_y;
+      v_seg_z[muIndex]    = muSegPos.avg_z;
+      v_n_seg[muIndex]    = muSegPos.n_segments;
     } // end loop on muons 
 
     putValueMap(event, recoMuons, v_iso0, "isoNewTk");
@@ -339,6 +423,11 @@ void DisplacedMuonIsolation::produce(edm::Event& event, const edm::EventSetup& s
     putValueMap(event, recoMuons, v_px_mb2, "pxAtMB2");
     putValueMap(event, recoMuons, v_py_mb2, "pyAtMB2");
     putValueMap(event, recoMuons, v_pz_mb2, "pzAtMB2");
+
+    putValueMap(event, recoMuons, v_seg_x, "sumSegX");
+    putValueMap(event, recoMuons, v_seg_y, "sumSegY");
+    putValueMap(event, recoMuons, v_seg_z, "sumSegZ");
+    putValueMap(event, recoMuons, v_n_seg, "nSeg");
 }
 
 ReferenceCountingPointer<BoundCylinder> DisplacedMuonIsolation::theBarrel_ = nullptr;

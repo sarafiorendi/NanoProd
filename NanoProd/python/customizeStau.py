@@ -111,9 +111,13 @@ def customize_process_and_associate(process, isMC, useCHSJets = True, isCosmics 
           "x_at_mb2":                 ExtVar("disMuonIsolation:xAtMB2"             , float, doc = "x when muon traj propagated at MB2 surface"),
           "y_at_mb2":                 ExtVar("disMuonIsolation:yAtMB2"             , float, doc = "y when muon traj propagated at MB2 surface"),
           "z_at_mb2":                 ExtVar("disMuonIsolation:zAtMB2"             , float, doc = "z when muon traj propagated at MB2 surface"),
-          "px_at_mb2":                 ExtVar("disMuonIsolation:pxAtMB2"             , float, doc = "px when muon traj propagated at MB2 surface"),
-          "py_at_mb2":                 ExtVar("disMuonIsolation:pyAtMB2"             , float, doc = "py when muon traj propagated at MB2 surface"),
-          "pz_at_mb2":                 ExtVar("disMuonIsolation:pzAtMB2"             , float, doc = "pz when muon traj propagated at MB2 surface"),
+          "px_at_mb2":                ExtVar("disMuonIsolation:pxAtMB2"            , float, doc = "px when muon traj propagated at MB2 surface"),
+          "py_at_mb2":                ExtVar("disMuonIsolation:pyAtMB2"            , float, doc = "py when muon traj propagated at MB2 surface"),
+          "pz_at_mb2":                ExtVar("disMuonIsolation:pzAtMB2"            , float, doc = "pz when muon traj propagated at MB2 surface"),
+          "sumSegX":                  ExtVar("disMuonIsolation:sumSegX"            , float, doc = "sum of matched segments x coordinate"),
+          "sumSegY":                  ExtVar("disMuonIsolation:sumSegY"            , float, doc = "sum of matched segments y coordinate"),
+          "sumSegZ":                  ExtVar("disMuonIsolation:sumSegZ"            , float, doc = "sum of matched segments z coordinate"),
+          "nSeg":                     ExtVar("disMuonIsolation:nSeg"               , float, doc = "number of matched segments with coordinates"),
     }
 
     process.disMuonTable = simplePATMuonFlatTableProducer.clone(
@@ -130,9 +134,9 @@ def customize_process_and_associate(process, isMC, useCHSJets = True, isCosmics 
             dxybs = Var("dB('BS2D')",float,doc="dxy (with sign) wrt the beam spot, in cm",precision=10),
             dxy = Var("dB('PV2D')",float,doc="dxy (with sign) wrt first PV, in cm",precision=10),
             dxyErr = Var("edB('PV2D')",float,doc="dxy uncertainty, in cm",precision=6),
-            trkChi2 = Var("? globalTrack().isNonnull() ? globalTrack().normalizedChi2() : ? innerTrack().isNonnull() && innerTrack().isAvailable() ? innerTrack().normalizedChi2() : -99",float,doc="Normalized Chi Square from either globalTrack or innerTrack "),
+            trkChi2 = Var("? globalTrack().isNonnull() ? globalTrack().normalizedChi2() : ? innerTrack().isNonnull() && innerTrack().isAvailable() ? innerTrack().normalizedChi2() : -99.",float,doc="Normalized Chi Square from either globalTrack or innerTrack "),
             muonHits = Var("? globalTrack().isNonnull() ? globalTrack().hitPattern().numberOfValidMuonHits() : ?  innerTrack().isNonnull() && innerTrack().isAvailable() ? innerTrack().hitPattern().numberOfValidMuonHits() :-99",float,doc="Number of valid Muon Hits from either globalTrack or innerTrack"),
-            pixelHits = Var("? innerTrack().isNonnull() && innerTrack().isAvailable() ? innerTrack().hitPattern().numberOfValidPixelHits() : -99", float, doc="Numbr of valid pixel hits"),
+            pixelHits = Var("? innerTrack().isNonnull() && innerTrack().isAvailable() ? innerTrack().hitPattern().numberOfValidPixelHits() : -99", float, doc="Number of valid pixel hits"),
             validFraction = Var("? innerTrack().isNonnull() && innerTrack().isAvailable() ? innerTrack().validFraction() : -99", float, doc="Inner Track Valid Fraction"),
             positionChi2 = Var("combinedQuality().chi2LocalPosition", float, doc="chi2 Local Position"),
             trkKink = Var("combinedQuality().trkKink", float, doc="Track Kink"),
@@ -185,13 +189,17 @@ def customize_process_and_associate(process, isMC, useCHSJets = True, isCosmics 
             numberOfValidMuonHits = Var("? isStandAloneMuon ? standAloneMuon().hitPattern().numberOfValidMuonHits() : 0", "uint8", doc = "number of valid muon hits from sta track"),
             dtStationsWithValidHits = Var("? isStandAloneMuon ? standAloneMuon().hitPattern().dtStationsWithValidHits() : 0", "uint8", doc = "number of dt stations with hits"),
             cscStationsWithValidHits = Var("? isStandAloneMuon ? standAloneMuon().hitPattern().cscStationsWithValidHits() : 0", "uint8", doc = "number of csc stations with hits"),
-            staTrackNormChi2 = Var("? isStandAloneMuon ? standAloneMuon().normalizedChi2() : 0", "uint8", doc = "nsta track normalizedChi2"),
+            staTrackNormChi2 = Var("? isStandAloneMuon ? standAloneMuon().normalizedChi2() : 0", float, doc = "nsta track normalizedChi2"),
             pca_phi = Var("? isStandAloneMuon ? standAloneMuon().referencePoint().phi() : 0", float, doc = "phi at the point of closest approch"),
             pca_x = Var("? isStandAloneMuon ? standAloneMuon().referencePoint().x() : -999", float, doc = "x at the point of closest approch"),
             pca_y = Var("? isStandAloneMuon ? standAloneMuon().referencePoint().y() : -999", float, doc = "y at the point of closest approch"),
             pca_z = Var("? isStandAloneMuon ? standAloneMuon().referencePoint().z() : -999", float, doc = "z at the point of closest approch"),
             px   = Var("px()", float, doc = "px", precision=6),
             py   = Var("py()", float, doc = "py", precision=6),
+            
+            outertrack_pt  = Var("? outerTrack().isNonnull() ? outerTrack().pt(): 0",  float, doc = "pt from the outer track"),
+            outertrack_phi = Var("? outerTrack().isNonnull() ? outerTrack().phi(): 0", float, doc = "phi from the outer track"),
+            outertrack_eta = Var("? outerTrack().isNonnull() ? outerTrack().eta(): 0", float, doc = "eta from the outer track"),
 
             #Sim Variables
 #             simType = Var("? simType() ? simType() : -99",int,doc="simType"),
@@ -583,10 +591,22 @@ def addDileptonVertices(process, isMC):
 
 
 
-def customizeStau(process):
+# def customizeStau(process):
+def customizeStau(process, isCosmics=False):
 
-  isMC = True
-  isCosmics = False
+  isMC = False
+  if '_mc' in process.GlobalTag.globaltag.value():
+    isMC = True
+
+#   isTmpCosmics = os.environ.get("NANOTAU_IS_COSMICS", "0") == "1"
+#   process.isCosmics = cms.PSet(enabled = cms.bool(isTmpCosmics))
+#   isCosmics = process.isCosmics.enabled.value()
+  isCosmics = False	
+  ## couldn't find a better solution :(
+  if 'LooseMuCosmic' in process.source.fileNames[0]: 
+    isCosmics = True
+  print ('isCosmics = ',isCosmics)
+     
   useCHS = True
   # customize stored objects
 
